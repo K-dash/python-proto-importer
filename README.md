@@ -1,5 +1,9 @@
 # python-proto-importer
 
+[![Crates.io](https://img.shields.io/crates/v/python-proto-importer.svg)](https://crates.io/crates/python-proto-importer)
+[![PyPI](https://img.shields.io/pypi/v/python-proto-importer.svg)](https://pypi.org/project/python-proto-importer/)
+[![CI](https://github.com/K-dash/python-proto-importer/actions/workflows/ci.yml/badge.svg)](https://github.com/K-dash/python-proto-importer/actions)
+
 Rust-based CLI to streamline Python gRPC/Protobuf workflows: generate code, stabilize imports, and run type checks in a single command. Ships as a PyPI package (via maturin) and as a Rust crate.
 
 - **Backends**: `protoc` (v0.1), `buf generate` (planned v0.2)
@@ -37,14 +41,22 @@ mypy_cmd = ["uv", "run", "mypy", "--strict", "generated/python"]
 pyright_cmd = ["uv", "run", "pyright", "generated/python"]
 ```
 
-## E2E test (opt-in)
+## Buf backend example (planned v0.2)
 
-The repository contains an opt-in end-to-end test validating generation + rewriting.
+`buf generate` support is planned for v0.2. A tentative example configuration:
 
-```bash
-# prerequisites: grpcio-tools available to your python_exe (python3 or uv)
-E2E_RUN=1 cargo test --test e2e_smoke
+```toml
+[tool.python_proto_importer]
+backend = "buf"
+buf_gen_yaml = "buf.gen.yaml"
+postprocess = { protoletariat = true, fix_pyi = true, create_package = true, exclude_google = true }
+
+[tool.python_proto_importer.verify]
+# Adjust to your project
+mypy_cmd = ["uv", "run", "mypy", "--strict", "gen/python"]
 ```
+
+For E2E test instructions, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Limitations
 
