@@ -90,6 +90,7 @@ mod commands {
     use super::config::{AppConfig, Backend};
     use super::generator::protoc::ProtocRunner;
     use super::postprocess::create_packages;
+    use super::postprocess::fds::load_fds_from_bytes;
     use anyhow::{Context, Result, bail};
     use std::fs;
     use std::path::Path;
@@ -101,7 +102,9 @@ mod commands {
         match cfg.backend {
             Backend::Protoc => {
                 let runner = ProtocRunner::new(&cfg);
-                runner.generate()?;
+                let fds_bytes = runner.generate()?;
+                // decode now (pool not yet used further in v0.1)
+                let _pool = load_fds_from_bytes(&fds_bytes).context("decode FDS failed")?;
             }
             Backend::Buf => {
                 // v0.2 で実装

@@ -1,5 +1,6 @@
 use crate::config::AppConfig;
 use anyhow::{Context, Result};
+use std::fs;
 use std::process::Command;
 use tempfile::NamedTempFile;
 
@@ -12,7 +13,7 @@ impl<'a> ProtocRunner<'a> {
         Self { cfg }
     }
 
-    pub fn generate(&self) -> Result<()> {
+    pub fn generate(&self) -> Result<Vec<u8>> {
         // 1) descriptor set を作成
         let fds = NamedTempFile::new().context("create temp file for descriptor set")?;
         let fds_path = fds.path().to_path_buf();
@@ -55,7 +56,8 @@ impl<'a> ProtocRunner<'a> {
             anyhow::bail!("grpc_tools.protoc failed: status {}", status);
         }
 
-        // TODO: fds_path を読み込んで後処理に渡す（次フェーズ）
-        Ok(())
+        // FDS を読み込んで返却
+        let bytes = fs::read(&fds_path).context("failed to read descriptor_set_out")?;
+        Ok(bytes)
     }
 }
