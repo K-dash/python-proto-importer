@@ -1,66 +1,318 @@
-# python-proto-importer（日本語）
+# python-proto-importer
 
-Python の gRPC/Protobuf 開発を、生成 → import 安定化 → 型検証までワンコマンドで実行する Rust 製 CLI です。PyPI 配布（maturin 同梱）および crates.io 配布に対応します。
+[![Crates.io](https://img.shields.io/crates/v/python-proto-importer.svg)](https://crates.io/crates/python-proto-importer)
+[![PyPI](https://img.shields.io/pypi/v/python-proto-importer.svg)](https://pypi.org/project/python-proto-importer/)
+[![CI](https://github.com/K-dash/python-proto-importer/actions/workflows/ci.yml/badge.svg)](https://github.com/K-dash/python-proto-importer/actions)
 
-- **バックエンド**: `protoc`（v0.1）、`buf generate`（v0.2 予定）
-- **後処理**: 生成物内部を相対 import に統一、`__init__.py` 自動生成
-- **型**: `mypy-protobuf` / `mypy-grpc` の出力（`.pyi`）をオプションで生成
-- **検証**: import ドライラン、必要に応じて mypy / pyright 実行
+Rust製のCLIツールで、Python向けのgRPC/Protobufワークフローを効率化：コード生成、import文の安定化、型チェックを単一コマンドで実行。PyPIパッケージ（maturin経由）およびRust crateとして配布。
+
+- **バックエンド**: `protoc` (v0.1)、`buf generate` (v0.2で対応予定)
+- **後処理**: 内部importを相対importに変換、`__init__.py`を生成
+- **型付け**: オプションで`mypy-protobuf` / `mypy-grpc`による型スタブ生成
+- **検証**: importドライラン、オプションでmypy/pyright実行
+
+## 目次
+
+- [クイックスタート](#クイックスタート)
+- [コマンド](#コマンド)
+- [設定](#設定)
+  - [コア設定](#コア設定)
+  - [後処理設定](#後処理設定)
+  - [検証設定](#検証設定)
+- [設定例](#設定例)
+- [高度な使い方](#高度な使い方)
+- [制限事項](#制限事項)
+- [コントリビューション](#コントリビューション)
+- [ライセンス](#ライセンス)
 
 ## クイックスタート
 
 ```bash
 pip install python-proto-importer
-# もしくは
+# または
 cargo install python-proto-importer
 ```
 
-## 設定例（protoc backend）
+`pyproject.toml`に設定を記述：
 
 ```toml
 [tool.python_proto_importer]
 backend = "protoc"
-python_exe = "python3" # あるいは "uv"
+python_exe = "python3"
 include = ["proto"]
 inputs = ["proto/**/*.proto"]
 out = "generated/python"
-# 型スタブの生成（任意）
-mypy = true
-mypy_grpc = true
-postprocess = { protoletariat = true, fix_pyi = true, create_package = true, exclude_google = true }
-
-[tool.python_proto_importer.verify]
-# 最小限の例。プロジェクトに合わせて調整してください
-mypy_cmd = ["uv", "run", "mypy", "--strict", "generated/python"]
-pyright_cmd = ["uv", "run", "pyright", "generated/python"]
 ```
 
-## Buf backend の設定例（v0.2 予定）
+ビルドを実行：
 
-`buf generate` 対応は v0.2 で追加予定です。暫定の設定例は次の通りです。
+```bash
+proto-importer build
+```
+
+## コマンド
+
+### `proto-importer doctor`
+必要なツール（protoc、buf、grpc_tools、mypy、pyright）の環境チェック。
+
+### `proto-importer build [--pyproject PATH]`
+protoファイルからPythonコードを生成し、後処理を適用、検証を実行。
+
+オプション：
+- `--pyproject PATH`: pyproject.tomlのパス（デフォルト: `./pyproject.toml`）
+- `--no-verify`: 生成後の検証をスキップ
+- `--postprocess-only`: 生成をスキップし、後処理のみ実行（実験的）
+
+### `proto-importer check [--pyproject PATH]`
+生成なしで検証のみ実行（importドライランと型チェック）。
+
+### `proto-importer clean [--pyproject PATH] --yes`
+生成された出力ディレクトリを削除。`--yes`による確認が必要。
+
+## 設定
+
+すべての設定は`pyproject.toml`の`[tool.python_proto_importer]`セクションで行います。
+
+### コア設定
+
+| オプション | 型 | デフォルト | 説明 |
+|--------|------|---------|-------------|
+| `backend` | string | `"protoc"` | コード生成バックエンド。現在は`"protoc"`のみサポート。`"buf"`はv0.2で対応予定。 |
+| `python_exe` | string | `"python3"` | 生成と検証に使用するPython実行ファイル。`"python3"`、`"python"`、`"uv"`、または`".venv/bin/python"`のようなパス。 |
+| `include` | array | `["."]` | Protoインポートパス（protocの`--proto_path`として渡される）。空配列の場合は`["."]`がデフォルト。詳細は[Includeパスの動作](#includeパスの動作)を参照。 |
+| `inputs` | array | `[]` | 生成対象のprotoファイルのGlobパターン。例：`["proto/**/*.proto"]`。ファイルは`include`パスでフィルタリングされる。 |
+| `out` | string | `"generated/python"` | 生成されたPythonファイルの出力ディレクトリ。 |
+| `mypy` | boolean | `false` | `mypy-protobuf`を使用してmypy型スタブ（`.pyi`ファイル）を生成。 |
+| `mypy_grpc` | boolean | `false` | `mypy-grpc`を使用してgRPC mypy型スタブ（`_grpc.pyi`ファイル）を生成。 |
+
+#### Includeパスの動作
+
+`include`オプションはprotoインポートパスを制御し、`inputs`との重要な相互作用があります：
+
+1. **デフォルト動作**: `include`が空または未指定の場合、`["."]`（カレントディレクトリ）がデフォルトになります。
+
+2. **パス解決**: `include`の各パスはprotocに`--proto_path`として渡されます。protoファイルはこれらのパス内の他のprotoのみをインポートできます。
+
+3. **入力フィルタリング**: `inputs`のGlobにマッチしたファイルは、`include`パス配下のもののみに自動的にフィルタリングされます。これにより、Globがincludeパス外のファイルにマッチした場合のprotocエラーを防ぎます。
+
+4. **出力構造**: 生成されたファイルは`include`パスからの相対ディレクトリ構造を維持します。例：
+   - `include = ["proto"]`で`proto/service/api.proto`のファイルの場合
+   - 出力は`{out}/service/api_pb2.py`になります
+
+5. **複数のIncludeパス**: `include = ["proto/common", "proto/services"]`のような複数パスを指定する場合、同じ相対パスのファイルが競合を引き起こす可能性があることに注意してください。
+
+**例：**
+
+```toml
+# シンプルなケース - proto/ディレクトリ下のすべてのproto
+include = ["proto"]
+inputs = ["proto/**/*.proto"]
+
+# 複数のincludeパス - 別々のprotoルートに便利
+include = ["common/proto", "services/proto"]
+inputs = ["**/*.proto"]
+
+# 選択的な生成 - 特定のサービスのみ
+include = ["."]  # パスの競合を避けるためカレントディレクトリを使用
+inputs = ["proto/payment/**/*.proto", "proto/user/**/*.proto"]
+
+# 代替proto構造
+include = ["api/definitions"]
+inputs = ["api/definitions/**/*.proto"]
+```
+
+### 後処理設定
+
+`postprocess`テーブルは生成後の変換を制御します：
+
+| オプション | 型 | デフォルト | 説明 |
+|--------|------|---------|-------------|
+| `protoletariat` | boolean | `true` | 生成されたファイル内の絶対importを相対importに変換。 |
+| `fix_pyi` | boolean | `true` | `.pyi`ファイル内の型アノテーションを修正（現在は将来の使用のために予約）。 |
+| `create_package` | boolean | `true` | すべてのディレクトリに`__init__.py`ファイルを作成。名前空間パッケージ（PEP 420）の場合は`false`に設定。 |
+| `exclude_google` | boolean | `true` | `google.protobuf`のimportを相対import変換から除外。 |
+| `pyright_header` | boolean | `false` | 生成された`_pb2.py`と`_pb2_grpc.py`ファイルにPyright抑制ヘッダーを追加。 |
+| `module_suffixes` | array | 下記参照 | 後処理中に処理するファイルサフィックス。 |
+
+デフォルトの`module_suffixes`：
+```toml
+module_suffixes = ["_pb2.py", "_pb2.pyi", "_pb2_grpc.py", "_pb2_grpc.pyi"]
+```
+
+### 検証設定
+
+`[tool.python_proto_importer.verify]`セクションはオプションの検証コマンドを設定します：
+
+| オプション | 型 | デフォルト | 説明 |
+|--------|------|---------|-------------|
+| `mypy_cmd` | array | `null` | mypy型チェックを実行するコマンド。例：`["mypy", "--strict", "generated"]` |
+| `pyright_cmd` | array | `null` | pyright型チェックを実行するコマンド。例：`["pyright", "generated"]` |
+
+**重要な注意事項：**
+
+1. **Importドライラン**: 常に自動的に実行されます。ツールは生成されたすべてのPythonモジュールをインポートして有効性を確認します。
+
+2. **型チェック**: 設定されている場合のみ実行されます。ツール（mypy/pyright）は環境内で利用可能である必要があります。
+
+3. **コマンド配列**: コマンドは配列として指定され、最初の要素が実行ファイル、残りの要素が引数になります。
+
+**例：**
+
+```toml
+[tool.python_proto_importer.verify]
+# uvを使用して型チェッカーを実行
+mypy_cmd = ["uv", "run", "mypy", "--strict", "generated/python"]
+pyright_cmd = ["uv", "run", "pyright", "generated/python"]
+
+# 直接実行
+mypy_cmd = ["mypy", "--config-file", "mypy.ini", "generated"]
+
+# pyrightで.pyiファイルのみをチェック
+pyright_cmd = ["pyright", "generated/**/*.pyi"]
+
+# mypyの厳格なチェックから生成されたgRPCファイルを除外
+mypy_cmd = ["mypy", "--strict", "--exclude", ".*_grpc\\.py$", "generated"]
+```
+
+## 設定例
+
+### 最小設定
 
 ```toml
 [tool.python_proto_importer]
-backend = "buf"
-buf_gen_yaml = "buf.gen.yaml"
-postprocess = { protoletariat = true, fix_pyi = true, create_package = true, exclude_google = true }
-
-[tool.python_proto_importer.verify]
-# プロジェクトに応じて調整してください
-mypy_cmd = ["uv", "run", "mypy", "--strict", "gen/python"]
+backend = "protoc"
+inputs = ["proto/**/*.proto"]
+out = "generated"
 ```
 
-## コントリビュート
+### フル機能設定
 
-E2E テストの実行手順を含む開発者向けドキュメントは、[CONTRIBUTING.md](../CONTRIBUTING.md) を参照してください。
+```toml
+[tool.python_proto_importer]
+backend = "protoc"
+python_exe = ".venv/bin/python"
+include = ["proto"]
+inputs = ["proto/**/*.proto"]
+out = "src/generated"
+mypy = true
+mypy_grpc = true
+
+[tool.python_proto_importer.postprocess]
+protoletariat = true
+fix_pyi = true
+create_package = true
+exclude_google = true
+pyright_header = true
+
+[tool.python_proto_importer.verify]
+mypy_cmd = ["uv", "run", "mypy", "--strict", "--exclude", ".*_grpc\\.py$", "src/generated"]
+pyright_cmd = ["uv", "run", "pyright", "src/generated/**/*.pyi"]
+```
+
+### 名前空間パッケージ設定（PEP 420）
+
+```toml
+[tool.python_proto_importer]
+backend = "protoc"
+include = ["proto"]
+inputs = ["proto/**/*.proto"]
+out = "generated"
+
+[tool.python_proto_importer.postprocess]
+create_package = false  # __init__.pyファイルを作成しない
+```
+
+### 選択的サービス生成
+
+```toml
+[tool.python_proto_importer]
+backend = "protoc"
+include = ["."]
+# 特定のサービスのみ生成
+inputs = [
+    "proto/authentication/**/*.proto",
+    "proto/user_management/**/*.proto"
+]
+out = "services/generated"
+```
+
+### カスタムディレクトリ構造
+
+```toml
+[tool.python_proto_importer]
+backend = "protoc"
+# 非標準のproto配置用
+include = ["api/v1/definitions"]
+inputs = ["api/v1/definitions/**/*.proto"]
+out = "build/python/api"
+```
+
+## 高度な使い方
+
+### uvとの連携
+
+[uv](https://github.com/astral-sh/uv)はpipとvirtualenvを置き換える高速なPythonパッケージマネージャーです：
+
+```toml
+[tool.python_proto_importer]
+python_exe = "uv"  # または uv venvを使用している場合は ".venv/bin/python"
+# ... 残りの設定
+
+[tool.python_proto_importer.verify]
+mypy_cmd = ["uv", "run", "mypy", "--strict", "generated"]
+```
+
+### CI/CD統合
+
+```yaml
+# GitHub Actionsの例
+- name: 依存関係のインストール
+  run: |
+    pip install python-proto-importer
+    pip install grpcio-tools mypy-protobuf
+
+- name: protoからPythonコードを生成
+  run: proto-importer build
+
+- name: テストの実行
+  run: pytest tests/
+```
+
+### 複雑なProto依存関係の処理
+
+複数のディレクトリにまたがる複雑なproto依存関係を扱う場合：
+
+```toml
+[tool.python_proto_importer]
+# 必要なすべてのprotoルートを含める
+include = [
+    ".",
+    "third_party/proto",
+    "vendor/proto"
+]
+# 競合を避けるため特定のパターンを使用
+inputs = [
+    "src/proto/**/*.proto",
+    "third_party/proto/specific_service/**/*.proto"
+]
+out = "generated"
+```
 
 ## 制限事項
 
-- v0.1 は `protoc` バックエンドのみ対応。`buf generate` は v0.2 で対応予定です。
-- import 置換は一般的な `_pb2(_grpc)?.py[ i]` パターンを対象としており、網羅性はテストを追加しながら拡張していきます。
-- 型検証（mypy/pyright）は設定した場合のみ実行され、各ツールは PATH 上に必要です。
-- ネームスペースパッケージ（PEP 420）に対しては、import 成功を優先して `__init__.py` を生成するのがデフォルト。設定で無効化できます。
+- **v0.1の制限事項**：
+  - `protoc`バックエンドのみサポート。`buf generate`サポートはv0.2で予定。
+  - Import書き換えは一般的な`_pb2(_grpc)?.py[i]`パターンをターゲットとしており、より広いカバレッジはテストとともに段階的に追加。
+  
+- **既知の動作**：
+  - 同じ名前のファイルを持つ複数の`include`パスを使用する場合、protocが「shadowing」エラーを報告する可能性があります。これを回避するには選択的な`inputs`パターンを使用してください。
+  - 生成されたファイル構造はprotocの規約に従います：ファイルは`--proto_path`からの相対位置に配置されます。
+  - 型チェッカー（mypy/pyright）は別途インストールされ、PATHまたはPython環境で利用可能である必要があります。
+
+## コントリビューション
+
+開発セットアップとガイドラインについては[CONTRIBUTING.md](../CONTRIBUTING.md)を参照してください。
 
 ## ライセンス
 
-Apache-2.0。Protoletariat / fix-protobuf-imports など既存 OSS の挙動を参考に、Rust で独自実装しています。詳細は LICENSE を参照してください。
+Apache-2.0。このプロジェクトは既存のOSSツール（例：Protoletariat、fix-protobuf-imports）の動作に触発された独立したRust再実装です。詳細はLICENSEファイルを参照してください。
