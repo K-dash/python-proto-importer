@@ -3,6 +3,9 @@ use clap::{Parser, Subcommand};
 use tracing_subscriber::EnvFilter;
 
 mod config;
+mod generator {
+    pub mod protoc;
+}
 
 #[derive(Parser, Debug)]
 #[command(name = "proto-importer", version, about = "Python proto importer toolkit")] 
@@ -77,7 +80,8 @@ fn main() -> Result<()> {
 }
 
 mod commands {
-    use super::config::AppConfig;
+    use super::config::{AppConfig, Backend};
+    use super::generator::protoc::ProtocRunner;
     use anyhow::{bail, Context, Result};
     use std::fs;
     use std::path::Path;
@@ -85,7 +89,18 @@ mod commands {
     pub fn build(pyproject: Option<&str>, no_verify: bool, _postprocess_only: bool) -> Result<()> {
         let cfg = AppConfig::load(pyproject.map(Path::new)).context("failed to load config")?;
         tracing::info!(?cfg.backend, out=%cfg.out.display(), "build start");
-        // v0.1: ここで protoc 実行と後処理を実装予定。現時点は雛形のみ。
+
+        match cfg.backend {
+            Backend::Protoc => {
+                let runner = ProtocRunner::new(&cfg);
+                runner.generate()?;
+            }
+            Backend::Buf => {
+                // v0.2 で実装
+                tracing::warn!("buf backend is not implemented yet");
+            }
+        }
+
         if !no_verify {
             verify(&cfg)?;
         }
@@ -111,7 +126,6 @@ mod commands {
     }
 
     fn verify(cfg: &AppConfig) -> Result<()> {
-        // v0.1: 後段で import ドライラン / mypy / pyright を実装
         tracing::info!("verify placeholder for {}", cfg.out.display());
         Ok(())
     }
