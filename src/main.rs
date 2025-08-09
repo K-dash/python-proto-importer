@@ -91,6 +91,7 @@ mod commands {
     use super::generator::protoc::ProtocRunner;
     use super::postprocess::create_packages;
     use super::postprocess::fds::load_fds_from_bytes;
+    use super::postprocess::rel_imports::scan_and_report;
     use anyhow::{Context, Result, bail};
     use std::fs;
     use std::path::Path;
@@ -117,6 +118,15 @@ mod commands {
             let created = create_packages(&cfg.out)?;
             tracing::info!("created __init__.py: {}", created);
         }
+
+        // 相対化候補のドライラン（件数のみ出力）
+        let (files, hits) =
+            scan_and_report(&cfg.out).context("scan relative-import candidates failed")?;
+        tracing::info!(
+            "relative-import candidates: files={}, lines={}",
+            files,
+            hits
+        );
 
         if !no_verify {
             verify(&cfg)?;
