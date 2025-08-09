@@ -4,6 +4,9 @@ default_to_workspace = false
 [tasks.default]
 run_task = { name = ["format", "lint"], parallel = true }
 
+[tasks.all]
+run_task = { name = ["format", "lint", "test"], parallel = true }
+
 [tasks.format]
 command = "cargo"
 args = ["fmt", "--all"]

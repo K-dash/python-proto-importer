@@ -1,0 +1,58 @@
+# python-proto-importer
+
+Rust-based CLI to streamline Python gRPC/Protobuf workflows: generate code, stabilize imports, and run type checks in a single command. Ships as a PyPI package (via maturin) and as a Rust crate.
+
+- **Backends**: `protoc` (v0.1), `buf generate` (planned v0.2)
+- **Postprocess**: convert internal imports to relative; generate `__init__.py`
+- **Typing**: optional `mypy-protobuf` / `mypy-grpc` emission
+- **Verification**: import dry-run, optional mypy/pyright
+
+For Japanese documentation, see: [docs/日本語README](doc/README.ja.md)
+
+## Quick start
+
+```bash
+pip install python-proto-importer
+# or
+cargo install python-proto-importer
+```
+
+## pyproject.toml example (protoc backend)
+
+```toml
+[tool.python_proto_importer]
+backend = "protoc"
+python_exe = "python3" # or "uv"
+include = ["proto"]
+inputs = ["proto/**/*.proto"]
+out = "generated/python"
+# Optional type stub generation
+mypy = true
+mypy_grpc = true
+postprocess = { protoletariat = true, fix_pyi = true, create_package = true, exclude_google = true }
+
+[tool.python_proto_importer.verify]
+# Keep minimal here; recommend project-specific settings
+mypy_cmd = ["uv", "run", "mypy", "--strict", "generated/python"]
+pyright_cmd = ["uv", "run", "pyright", "generated/python"]
+```
+
+## E2E test (opt-in)
+
+The repository contains an opt-in end-to-end test validating generation + rewriting.
+
+```bash
+# prerequisites: grpcio-tools available to your python_exe (python3 or uv)
+E2E_RUN=1 cargo test --test e2e_smoke
+```
+
+## Limitations
+
+- v0.1 supports `protoc` backend only. `buf generate` support is planned in v0.2.
+- Import rewriting targets common `_pb2(_grpc)?.py[ i]` patterns; broader coverage is added incrementally with tests.
+- Type checks (`mypy`/`pyright`) run only if configured; they require the tools to be available in PATH.
+- Namespace packages (PEP 420): we default to generating `__init__.py` to ensure importability; can be disabled via config.
+
+## License
+
+Apache-2.0. This project is an independent Rust re-implementation inspired by the behavior of existing OSS tools (e.g., Protoletariat, fix-protobuf-imports). Please see LICENSE for details.
