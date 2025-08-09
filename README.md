@@ -148,6 +148,21 @@ Default `module_suffixes`:
 module_suffixes = ["_pb2.py", "_pb2.pyi", "_pb2_grpc.py", "_pb2_grpc.pyi"]
 ```
 
+#### Import Rewrite Coverage and Limitations
+
+- Covered patterns:
+  - `import pkg.module_pb2` / `import pkg.module_pb2 as alias`
+  - `import pkg.mod1_pb2, pkg.sub.mod2_pb2 as alias` (split into multiple `from` lines)
+  - `from pkg import module_pb2` / `from pkg import module_pb2 as alias`
+  - `from pkg import mod1_pb2, mod2_pb2 as alias`
+  - `from pkg import (\n    mod1_pb2,\n    mod2_pb2 as alias,\n  )`
+- Exclusions/known behaviors:
+  - `google.protobuf.*` is excluded when `exclude_google = true` (default).
+  - Parentheses-based line continuation is supported for `from ... import (...)`; backslash continuations (e.g. `\\`) are not currently handled.
+  - Only modules matching `_pb2` / `_pb2_grpc` are candidates; other imports are left unchanged.
+  - Mixed lists are split: rewritten items go to a relative `from` line; non-target items remain as their original import.
+  - Rewrites only apply if the target module file exists under the configured `out` tree.
+
 ### Verification Configuration
 
 The `[tool.python_proto_importer.verify]` section configures optional verification commands:

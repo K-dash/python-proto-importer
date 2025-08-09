@@ -71,10 +71,42 @@ fn rewrite_lines_in_content(
     )
     .unwrap();
     let re_from = Regex::new(r"^(?P<indent>\s*)from\s+(?P<pkg>[A-Za-z0-9_\.]+)\s+import\s+(?P<name>[A-Za-z0-9_]+)(?:\s+as\s+(?P<alias>[A-Za-z0-9_]+))?\s*(?:#.*)?$").unwrap();
+    let re_from_any = Regex::new(r"^(?P<indent>\s*)from\s+(?P<pkg>[A-Za-z0-9_\.]+)\s+import\s+(?P<rest>.*)$").unwrap();
     let re_import_simple =
         Regex::new(r"^(?P<indent>\s*)import\s+(?P<mod>[A-Za-z0-9_\.]+)\s*(?:#.*)?$").unwrap();
+    let re_import_list =
+        Regex::new(r"^(?P<indent>\s*)import\s+(?P<rest>.+)$").unwrap();
+
+    // State for collecting parenthesized multi-line 'from ... import (...)' blocks
+    let mut pending_from_block: Option<(String, String, String)> = None; // (indent, pkg, collected)
 
     for line in content.lines() {
+        // Handle continuation of a parenthesized from-import block
+        if let Some((indent, pkg, mut collected)) = pending_from_block.take() {
+            collected.push_str("\n");
+            collected.push_str(line);
+            // Check if parentheses are balanced now
+            let opens = collected.matches('(').count();
+            let closes = collected.matches(')').count();
+            if closes < opens {
+                // Still pending
+                pending_from_block = Some((indent, pkg, collected));
+                continue;
+            }
+
+            // Process the full block
+            let processed = process_from_import_list(
+                &indent,
+                &pkg,
+                &collected,
+                file_dir,
+                root,
+                exclude_google,
+            )?;
+            out.push_str(&processed.output);
+            changed |= processed.changed;
+            continue;
+        }
         if line.trim_start().starts_with("from .") {
             out.push_str(line);
             out.push('\n');
@@ -119,6 +151,50 @@ fn rewrite_lines_in_content(
             }
         }
 
+        // Handle comma-separated 'import a, b as c' by splitting into tokens
+        if let Some(caps) = re_import_list.captures(line) {
+            let indent = &caps["indent"];
+            let rest = &caps["rest"]; // may contain commas and aliases
+            if rest.contains(',') {
+                let mut any_local_change = false;
+                for tok in rest.split(',') {
+                    let token = tok.trim();
+                    if token.is_empty() { continue; }
+                    // token: module[ as alias]
+                    let mut parts = token.split_whitespace().collect::<Vec<_>>();
+                    if parts.is_empty() { continue; }
+                    // reconstruct alias if provided
+                    let mut alias: Option<&str> = None;
+                    if parts.len() >= 3 && parts[parts.len()-2] == "as" {
+                        alias = Some(parts[parts.len()-1]);
+                        parts.truncate(parts.len()-2);
+                    }
+                    let module = parts.join(" ");
+                    if (module.ends_with("_pb2") || module.ends_with("_pb2_grpc")) && !(exclude_google && module.starts_with("google.protobuf")) {
+                        let (module_path, leaf) = split_module_qualname(&module);
+                        let target = path_from_module(root, &module_path, &leaf);
+                        if target.exists() {
+                            if let Some((ups, remainder)) = compute_relative_import_prefix(file_dir, target.parent().unwrap_or(root)) {
+                                let dots = ".".repeat(ups + 1);
+                                let from_pkg = if remainder.is_empty() { dots } else { format!("{dots}{remainder}") };
+                                if let Some(a) = alias {
+                                    out.push_str(&format!("{indent}from {from_pkg} import {leaf} as {a}\n"));
+                                } else {
+                                    out.push_str(&format!("{indent}from {from_pkg} import {leaf}\n"));
+                                }
+                                changed = true;
+                                any_local_change = true;
+                                continue;
+                            }
+                        }
+                    }
+                    // Fallback: keep original token as a separate import line
+                    out.push_str(&format!("{indent}import {token}\n"));
+                }
+                if any_local_change { continue; }
+            }
+        }
+
         if let Some(caps) = re_import.captures(line) {
             let indent = &caps["indent"];
             let module = &caps["mod"];
@@ -158,6 +234,7 @@ fn rewrite_lines_in_content(
                 continue;
             }
         }
+        // Handle single-name 'from pkg import name [as alias]'
         if let Some(caps) = re_from.captures(line) {
             let indent = &caps["indent"];
             let pkg = &caps["pkg"];
@@ -215,6 +292,25 @@ fn rewrite_lines_in_content(
                 continue;
             }
         }
+
+        // Handle 'from pkg import a, b as c' (single-line) or start of parenthesized block
+        if let Some(caps) = re_from_any.captures(line) {
+            let indent = caps["indent"].to_string();
+            let pkg = caps["pkg"].to_string();
+            let rest = caps["rest"].trim();
+            if rest.starts_with('(') && !rest.contains(')') {
+                // Begin collecting a multi-line parenthesized block
+                pending_from_block = Some((indent, pkg, line.to_string()));
+                continue;
+            }
+            if rest.contains(',') || rest.starts_with('(') {
+                // Process possibly parenthesized single-line list
+                let processed = process_from_import_list(&indent, &pkg, line, file_dir, root, exclude_google)?;
+                out.push_str(&processed.output);
+                changed |= processed.changed;
+                continue;
+            }
+        }
         out.push_str(line);
         out.push('\n');
     }
@@ -233,6 +329,103 @@ fn rewrite_lines_in_content(
     }
 
     Ok((out, changed))
+}
+
+struct FromImportProcessResult {
+    output: String,
+    changed: bool,
+}
+
+fn process_from_import_list(
+    indent: &str,
+    pkg: &str,
+    full_line_or_block: &str,
+    file_dir: &Path,
+    root: &Path,
+    exclude_google: bool,
+) -> Result<FromImportProcessResult> {
+    // Extract everything after 'from <pkg> import'
+    let after_import = match full_line_or_block.splitn(2, " import ").nth(1) {
+        Some(s) => s.trim(),
+        None => full_line_or_block.trim(),
+    };
+
+    // Remove wrapping parentheses and trailing comment lines
+    let mut inner = after_import.trim();
+    if inner.starts_with('(') {
+        // Remove the first '(' and the matching last ')'
+        // For robustness, just trim leading '(' and trailing ')' and whitespace/commas
+        inner = inner.trim_start_matches('(');
+        inner = inner.trim_end();
+        if inner.ends_with(')') {
+            inner = &inner[..inner.len()-1];
+        }
+    }
+
+    // Split by commas across potential multi-lines
+    let mut tokens: Vec<String> = Vec::new();
+    for raw in inner.lines() {
+        let no_comment = match raw.find('#') { Some(idx) => &raw[..idx], None => raw };
+        for part in no_comment.split(',') {
+            let t = part.trim();
+            if !t.is_empty() { tokens.push(t.to_string()); }
+        }
+    }
+
+    if tokens.is_empty() {
+        return Ok(FromImportProcessResult { output: format!("{}from {} import {}\n", indent, pkg, inner.trim()), changed: false });
+    }
+
+    // Partition into rewritable and others
+    let mut rewrite_items: Vec<(String, Option<String>)> = Vec::new();
+    let mut keep_items: Vec<String> = Vec::new();
+    for tok in tokens {
+        // token: name [as alias]
+        let mut name = tok.as_str();
+        let mut alias: Option<String> = None;
+        if let Some(pos) = tok.rfind(" as ") {
+            name = &tok[..pos].trim();
+            alias = Some(tok[pos+4..].trim().to_string());
+        }
+        if (name.ends_with("_pb2") || name.ends_with("_pb2_grpc")) && !(exclude_google && pkg.starts_with("google.protobuf")) {
+            // Check target exists
+            let target = path_from_module(root, pkg, name);
+            if target.exists() {
+                rewrite_items.push((name.to_string(), alias));
+                continue;
+            }
+        }
+        keep_items.push(tok);
+    }
+
+    if rewrite_items.is_empty() {
+        // No change
+        return Ok(FromImportProcessResult { output: format!("{}{}\n", indent, full_line_or_block.trim()), changed: false });
+    }
+
+    // Compute relative from-pkg using any one item's target (they share pkg)
+    let any_name = &rewrite_items[0].0;
+    let target = path_from_module(root, pkg, any_name);
+    let (ups, remainder) = compute_relative_import_prefix(file_dir, target.parent().unwrap_or(root)).unwrap_or((0, String::new()));
+    let dots = if ups == 0 { ".".to_string() } else { ".".repeat(ups + 1) };
+    let from_pkg = if remainder.is_empty() { dots } else { format!("{dots}{remainder}") };
+
+    // Build output lines: first the rewritten relative import
+    let mut output = String::new();
+    let list = rewrite_items
+        .into_iter()
+        .map(|(n, a)| match a { Some(x) => format!("{} as {}", n, x), None => n })
+        .collect::<Vec<_>>()
+        .join(", ");
+    output.push_str(&format!("{}from {} import {}\n", indent, from_pkg, list));
+
+    // Keep the remaining items via original absolute import if any
+    if !keep_items.is_empty() {
+        let keep_list = keep_items.join(", ");
+        output.push_str(&format!("{}from {} import {}\n", indent, pkg, keep_list));
+    }
+
+    Ok(FromImportProcessResult { output, changed: true })
 }
 
 #[allow(dead_code)]
@@ -367,6 +560,68 @@ mod tests {
         assert_eq!(b, "from .. import a_pb2 as a__pb2\n");
         let c = fs::read_to_string(root.join("c.py")).unwrap();
         assert_eq!(c, "import a_pb2 as a__pb2\n");
+    }
+
+    #[test]
+    fn rewrite_from_multi_items_single_line() {
+        let dir = tempdir().unwrap();
+        let root = dir.path();
+        // structure: pkg/a_pb2.py and pkg/b_pb2_grpc.py
+        std::fs::create_dir_all(root.join("pkg")).unwrap();
+        fs::write(root.join("pkg/a_pb2.py"), "# a").unwrap();
+        fs::write(root.join("pkg/b_pb2_grpc.py"), "# b").unwrap();
+        let file_dir = root.join("pkg");
+        let content = "from pkg import a_pb2, b_pb2_grpc as bgrpc\n";
+        let (out, changed) = rewrite_lines_in_content(content, &file_dir, root, false).unwrap();
+        assert!(changed);
+        assert_eq!(out.trim_end(), "from . import a_pb2, b_pb2_grpc as bgrpc");
+    }
+
+    #[test]
+    fn rewrite_from_parenthesized_multi_line() {
+        let dir = tempdir().unwrap();
+        let root = dir.path();
+        std::fs::create_dir_all(root.join("pkg")).unwrap();
+        fs::write(root.join("pkg/a_pb2.py"), "# a").unwrap();
+        fs::write(root.join("pkg/b_pb2.py"), "# b").unwrap();
+        let file_dir = root.join("pkg");
+        let content = "from pkg import (\n    a_pb2,\n    b_pb2 as bb,\n)\n";
+        let (out, changed) = rewrite_lines_in_content(content, &file_dir, root, false).unwrap();
+        assert!(changed);
+        assert_eq!(out.trim_end(), "from . import a_pb2, b_pb2 as bb");
+    }
+
+    #[test]
+    fn rewrite_import_list_into_multiple_lines() {
+        let dir = tempdir().unwrap();
+        let root = dir.path();
+        std::fs::create_dir_all(root.join("pkg/sub")).unwrap();
+        fs::write(root.join("pkg/a_pb2.py"), "# a").unwrap();
+        fs::write(root.join("pkg/sub/b_pb2.py"), "# b").unwrap();
+        let file_dir = root; // importing at project root
+        let content = "import pkg.a_pb2, pkg.sub.b_pb2 as bb, json\n";
+        let (out, changed) = rewrite_lines_in_content(content, file_dir, root, false).unwrap();
+        assert!(changed);
+        // Should produce two from-import lines and keep 'json' as import
+        let lines: Vec<_> = out.lines().collect();
+        assert_eq!(lines.len(), 3);
+        assert!(lines[0].starts_with("from .pkg import a_pb2") || lines[1].starts_with("from .pkg import a_pb2"));
+        assert!(lines.iter().any(|l| l.starts_with("from .pkg.sub import b_pb2 as bb")));
+        assert!(lines.iter().any(|l| *l == "import json"));
+    }
+
+    #[test]
+    fn keep_google_protobuf_in_multi() {
+        let dir = tempdir().unwrap();
+        let root = dir.path();
+        std::fs::create_dir_all(root.join("pkg")).unwrap();
+        fs::write(root.join("pkg/a_pb2.py"), "# a").unwrap();
+        let file_dir = root.join("pkg");
+        let content = "from google.protobuf import timestamp_pb2, duration_pb2\nfrom pkg import a_pb2, timestamp_pb2\n";
+        let (out, changed) = rewrite_lines_in_content(content, &file_dir, root, true).unwrap();
+        assert!(changed); // a_pb2 should change but google protobuf kept
+        assert!(out.contains("from . import a_pb2"));
+        assert!(out.contains("from google.protobuf import timestamp_pb2, duration_pb2"));
     }
 
     #[test]
