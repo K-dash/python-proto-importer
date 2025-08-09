@@ -1,0 +1,10 @@
+# Configuration with mixed relative paths in include
+[tool.python_proto_importer]
+backend = "protoc"
+python_exe = ".venv/bin/python"
+include = [".", "proto/payment", "proto/user"]  # Mixed: current dir and specific subdirs
+inputs = ["proto/**/*.proto"]
+out = "generated/relative_paths"
+mypy = false
+mypy_grpc = false
+postprocess = { protoletariat = true, fix_pyi = false, create_package = true, exclude_google = true, pyright_header = false }

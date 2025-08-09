@@ -1,0 +1,13 @@
+# Configuration with only mypy type stubs (no grpc stubs)
+[tool.python_proto_importer]
+backend = "protoc"
+python_exe = ".venv/bin/python"
+include = ["."]
+inputs = ["proto/**/*.proto"]
+out = "generated/mypy_only"
+mypy = true
+mypy_grpc = false
+postprocess = { protoletariat = true, fix_pyi = true, create_package = true, exclude_google = true, pyright_header = false }
+
+[tool.python_proto_importer.verify]
+mypy_cmd = ["uv", "run", "mypy", "--strict", "--exclude", ".*_grpc\\.py$", "generated/mypy_only"]

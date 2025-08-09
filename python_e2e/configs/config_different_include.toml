@@ -1,0 +1,12 @@
+# Configuration with selective include paths - should only include payment and user services
+# Note: We use "." as include to avoid protoc's shadowing issue with same-named files
+# and rely on inputs filtering instead
+[tool.python_proto_importer]
+backend = "protoc"
+python_exe = ".venv/bin/python"
+include = ["."]
+inputs = ["proto/payment/**/*.proto", "proto/user/**/*.proto"]
+out = "generated/selective_include"
+mypy = false
+mypy_grpc = false
+postprocess = { protoletariat = true, fix_pyi = false, create_package = true, exclude_google = true, pyright_header = false }

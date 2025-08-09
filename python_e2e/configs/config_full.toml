@@ -1,0 +1,14 @@
+# Full configuration with all features enabled
+[tool.python_proto_importer]
+backend = "protoc"
+python_exe = ".venv/bin/python"
+include = ["."]
+inputs = ["proto/**/*.proto"]
+out = "generated/full"
+mypy = true
+mypy_grpc = true
+postprocess = { protoletariat = true, fix_pyi = true, create_package = true, exclude_google = true, pyright_header = true }
+
+[tool.python_proto_importer.verify]
+mypy_cmd = ["uv", "run", "mypy", "--strict", "--exclude", ".*_grpc\\.py$", "generated/full"]
+pyright_cmd = ["uv", "run", "pyright", "generated/full/**/*.pyi"]

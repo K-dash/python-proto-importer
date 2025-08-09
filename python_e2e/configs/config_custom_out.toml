@@ -1,0 +1,10 @@
+# Configuration with custom output directory
+[tool.python_proto_importer]
+backend = "protoc"
+python_exe = ".venv/bin/python"
+include = ["."]
+inputs = ["proto/**/*.proto"]
+out = "generated_alt/python"
+mypy = false
+mypy_grpc = false
+postprocess = { protoletariat = true, fix_pyi = false, create_package = true, exclude_google = false, pyright_header = false }

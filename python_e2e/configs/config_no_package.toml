@@ -1,0 +1,10 @@
+# Configuration without __init__.py creation (PEP 420 namespace packages)
+[tool.python_proto_importer]
+backend = "protoc"
+python_exe = ".venv/bin/python"
+include = ["."]
+inputs = ["proto/**/*.proto"]
+out = "generated/no_package"
+mypy = true
+mypy_grpc = false
+postprocess = { protoletariat = true, fix_pyi = true, create_package = false, exclude_google = true, pyright_header = false }

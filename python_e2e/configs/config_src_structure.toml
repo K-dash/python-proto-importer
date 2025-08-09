@@ -1,0 +1,11 @@
+# Configuration for testing src/ structure - proto files in src/proto_importer_e2e/proto/
+# Generated files should go to src/proto_importer_e2e/generated/
+[tool.python_proto_importer]
+backend = "protoc"
+python_exe = ".venv/bin/python"
+include = ["src/proto_importer_e2e/proto"]
+inputs = ["src/proto_importer_e2e/proto/**/*.proto"]
+out = "src/proto_importer_e2e/generated"
+mypy = false
+mypy_grpc = false
+postprocess = { protoletariat = true, fix_pyi = false, create_package = true, exclude_google = true, pyright_header = false }

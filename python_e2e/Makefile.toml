@@ -1,0 +1,62 @@
+[config]
+skip_core_tasks = true
+
+[tasks.default]
+dependencies = ["private-setup"]
+run_task = { name = ["test"], parallel = true }
+
+[tasks.private-setup]
+private = true
+condition = { files_modified = { input = ["./pyproject.toml", "uv.lock"], output = [".venv/timestamp.txt"] } }
+script = [
+    "uv venv",
+    "uv sync",
+    "touch .venv/timestamp.txt",
+]
+
+[tasks.pytest]
+private = true
+command = "uv"
+args = [
+    "run",
+    "pytest",
+    "${@}",
+]
+
+[tasks.build]
+dependencies = ["private-setup"]
+script_runner = "@shell"
+script = '''
+pushd .. && cargo build --release && popd
+'''
+
+[tasks.gen]
+dependencies = ["private-setup", "build"]
+script_runner = "@shell"
+script = '''
+../target/release/python-proto-importer build --pyproject ${@}
+'''
+
+[tasks.clean]
+dependencies = ["private-setup"]
+script_runner = "@shell"
+script = '''
+rm -rf src/proto_importer_e2e/generated
+'''
+
+[tasks.test]
+dependencies = ["private-setup"]
+script_runner = "@shell"
+script = '''
+echo '📦 clean generated files...'
+rm -rf src/proto_importer_e2e/generated
+echo '🔨 build Rust binary...'
+cd .. && cargo build --release
+cd python_e2e
+echo '🧪 run tests...'
+uv run pytest
+echo '🧹 clean generated files...'
+rm -rf src/proto_importer_e2e/generated
+echo '✅ done!'
+'''
+
