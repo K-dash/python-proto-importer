@@ -135,7 +135,7 @@ mod commands {
         );
 
         // 設定が有効なら最小の相対化を適用（.py/.pyi）
-        if cfg.postprocess.protoletariat {
+        if cfg.postprocess.relative_imports {
             let modified = apply_rewrites_in_tree(
                 &cfg.out,
                 cfg.postprocess.exclude_google,
@@ -239,9 +239,16 @@ mod commands {
             let test_script = create_import_test_script(&package_name, &modules);
 
             // Run single comprehensive test with detailed output capture
-            let output = std::process::Command::new(&cfg.python_exe)
-                .arg("-c")
-                .arg(&test_script)
+            let mut cmd = std::process::Command::new(&cfg.python_exe);
+            
+            // Handle uv-specific command structure
+            if cfg.python_exe == "uv" {
+                cmd.arg("run").arg("python").arg("-c").arg(&test_script);
+            } else {
+                cmd.arg("-c").arg(&test_script);
+            }
+            
+            let output = cmd
                 .env("PYTHONPATH", &parent_path)
                 .output()
                 .with_context(|| {
@@ -446,9 +453,16 @@ except Exception as e:
                 module, full_module
             );
 
-            let output = std::process::Command::new(&cfg.python_exe)
-                .arg("-c")
-                .arg(&test_script)
+            let mut cmd = std::process::Command::new(&cfg.python_exe);
+            
+            // Handle uv-specific command structure
+            if cfg.python_exe == "uv" {
+                cmd.arg("run").arg("python").arg("-c").arg(&test_script);
+            } else {
+                cmd.arg("-c").arg(&test_script);
+            }
+            
+            let output = cmd
                 .env("PYTHONPATH", parent_path)
                 .output()
                 .with_context(|| {

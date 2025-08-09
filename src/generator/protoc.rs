@@ -39,7 +39,13 @@ impl<'a> ProtocRunner<'a> {
         // 既定python_exe（uv/python3）を使う
         let py = &self.cfg.python_exe;
         let mut cmd = Command::new(py);
-        cmd.arg("-m").arg("grpc_tools.protoc");
+        
+        // Handle uv-specific command structure
+        if py == "uv" {
+            cmd.arg("run").arg("-m").arg("grpc_tools.protoc");
+        } else {
+            cmd.arg("-m").arg("grpc_tools.protoc");
+        }
         // Ensure protoc plugins installed in the same env are discoverable
         if let Some(parent) = std::path::Path::new(py).parent() {
             if let Some(parent_str) = parent.to_str() {
@@ -137,7 +143,13 @@ impl<'a> ProtocRunner<'a> {
 
         let py = &self.cfg.python_exe;
         let mut cmd = Command::new(py);
-        cmd.arg("-m").arg("grpc_tools.protoc");
+        
+        // Handle uv-specific command structure
+        if py == "uv" {
+            cmd.arg("run").arg("-m").arg("grpc_tools.protoc");
+        } else {
+            cmd.arg("-m").arg("grpc_tools.protoc");
+        }
 
         // PATH handling
         if let Some(parent) = std::path::Path::new(py).parent() {
@@ -219,7 +231,7 @@ mod tests {
             generate_mypy: false,
             generate_mypy_grpc: false,
             postprocess: PostProcess {
-                protoletariat: true,
+                relative_imports: true,
                 fix_pyi: true,
                 create_package: true,
                 exclude_google: true,

@@ -142,6 +142,13 @@ def verify_pyright_header(gen_path: Path, has_header: bool):
         "has_init": True,
         "has_pyright_header": False,
     }),
+    ("config_uv_python_exe", {
+        "out": "generated/uv_test",
+        "has_mypy": False,
+        "has_mypy_grpc": False,
+        "has_init": True,
+        "has_pyright_header": False,
+    }),
 ])
 def test_with_config(config_name, expected):
     """Test build with different configuration files"""

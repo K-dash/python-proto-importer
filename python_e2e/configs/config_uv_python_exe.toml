@@ -1,0 +1,10 @@
+# Configuration to test uv as python_exe
+[tool.python_proto_importer]
+backend = "protoc"
+python_exe = "uv"
+include = ["."]
+inputs = ["proto/**/*.proto"]
+out = "generated/uv_test"
+mypy = false
+mypy_grpc = false
+postprocess = { relative_imports = true, fix_pyi = false, create_package = true, exclude_google = true, pyright_header = false }
