@@ -17,6 +17,8 @@ pub struct AppConfig {
     pub include: Vec<PathBuf>,
     pub inputs: Vec<String>,
     pub out: PathBuf,
+    pub generate_mypy: bool,
+    pub generate_mypy_grpc: bool,
     pub postprocess: PostProcess,
     pub verify: Option<Verify>,
 }
@@ -135,6 +137,9 @@ impl AppConfig {
             .map(PathBuf::from)
             .unwrap_or_else(|| PathBuf::from("generated/python"));
 
+        let generate_mypy = importer.core.mypy.unwrap_or(false);
+        let generate_mypy_grpc = importer.core.mypy_grpc.unwrap_or(false);
+
         let pp = importer.core.postprocess.unwrap_or(PostProcessToml {
             protoletariat: Some(true),
             fix_pyi: Some(true),
@@ -168,6 +173,8 @@ impl AppConfig {
             include,
             inputs,
             out,
+            generate_mypy,
+            generate_mypy_grpc,
             postprocess,
             verify,
         })

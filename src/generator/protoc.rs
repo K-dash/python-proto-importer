@@ -36,7 +36,13 @@ impl<'a> ProtocRunner<'a> {
         cmd.arg(format!("--python_out={}", self.cfg.out.display()));
         cmd.arg(format!("--grpc_python_out={}", self.cfg.out.display()));
 
-        // mypy/mypy_grpc は v0.1 では後日拡張（現状は無効）
+        // mypy/mypy_grpc 出力（オプション）
+        if self.cfg.generate_mypy {
+            cmd.arg(format!("--mypy_out={}", self.cfg.out.display()));
+        }
+        if self.cfg.generate_mypy_grpc {
+            cmd.arg(format!("--mypy_grpc_out={}", self.cfg.out.display()));
+        }
 
         // descriptor set 出力
         cmd.arg("--include_imports");
