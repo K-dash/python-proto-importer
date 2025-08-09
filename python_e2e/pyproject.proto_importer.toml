@@ -1,0 +1,14 @@
+[tool.python_proto_importer]
+backend = "protoc"
+python_exe = "uv"
+include = ["proto"]
+inputs = ["proto/**/*.proto"]
+out = "generated"
+mypy = true
+mypy_grpc = true
+postprocess = { protoletariat = true, fix_pyi = true, create_package = true, exclude_google = true, pyright_header = true }
+
+[tool.python_proto_importer.verify]
+# verify types against generated stubs
+mypy_cmd = ["uv", "run", "mypy", "--strict", "generated"]
+pyright_cmd = ["uv", "run", "pyright", "generated/**/*.pyi"]
