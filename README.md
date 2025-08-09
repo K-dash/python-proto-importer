@@ -85,7 +85,7 @@ All configuration is done through `pyproject.toml` under the `[tool.python_proto
 | Option       | Type    | Default              | Description                                                                                                                                                |
 | ------------ | ------- | -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `backend`    | string  | `"protoc"`           | Code generation backend. Currently only `"protoc"` is supported. `"buf"` planned for v0.2.                                                                 |
-| `python_exe` | string  | `"python3"`          | Python executable to use for generation and verification. Can be `"python3"`, `"python"`, `"uv"` (fully tested), or a path like `".venv/bin/python"`.        |
+| `python_exe` | string  | `"python3"`          | Python executable to use for generation and verification. Can be `"python3"`, `"python"`, `"uv"` (fully tested), or a path like `".venv/bin/python"`.      |
 | `include`    | array   | `["."]`              | Proto import paths (passed as `--proto_path` to protoc). Empty array defaults to `["."]`. See [Include Path Behavior](#include-path-behavior) for details. |
 | `inputs`     | array   | `[]`                 | Glob patterns for proto files to generate. Example: `["proto/**/*.proto"]`. Files are filtered by `include` paths.                                         |
 | `out`        | string  | `"generated/python"` | Output directory for generated Python files.                                                                                                               |

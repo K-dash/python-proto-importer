@@ -25,30 +25,30 @@ struct Cli {
 
 #[derive(Subcommand, Debug)]
 enum Commands {
-    /// 環境診断（protoc / buf / grpc_tools / mypy / pyright など）
+    /// Environment diagnostics (protoc / buf / grpc_tools / mypy / pyright etc.)
     Doctor,
-    /// 生成＋後処理＋検証
+    /// Generate + postprocess + verify
     Build {
-        /// pyproject.toml のパス（省略時カレント）
+        /// Path to pyproject.toml (defaults to current directory)
         #[arg(long)]
         pyproject: Option<String>,
-        /// 生成後に検証をスキップ
+        /// Skip verification after generation
         #[arg(long)]
         no_verify: bool,
-        /// 生成せず後処理・検証のみ（将来拡張用）
+        /// Skip generation, only postprocess and verify (future extension)
         #[arg(long)]
         postprocess_only: bool,
     },
-    /// 生成せず import/mypy/pyright の検証のみ
+    /// Only verify imports/mypy/pyright without generation
     Check {
         #[arg(long)]
         pyproject: Option<String>,
     },
-    /// 出力とキャッシュの削除
+    /// Clean output and cache directories
     Clean {
         #[arg(long)]
         pyproject: Option<String>,
-        /// 確認なしで削除
+        /// Delete without confirmation
         #[arg(long)]
         yes: bool,
     },
@@ -113,19 +113,19 @@ mod commands {
                 )
             }
             Backend::Buf => {
-                // v0.2 で実装（FDS収集未対応）
+                // To be implemented in v0.2 (FDS collection not supported)
                 tracing::warn!("buf backend is not implemented yet");
                 None
             }
         };
 
-        // __init__.py 生成（オプトイン/デフォルトON）
+        // Generate __init__.py files (opt-in/default ON)
         if cfg.postprocess.create_package {
             let created = create_packages(&cfg.out)?;
             tracing::info!("created __init__.py: {}", created);
         }
 
-        // 相対化候補のドライラン（件数のみ出力）
+        // Dry-run for relative import candidates (count only)
         let (files, hits) =
             scan_and_report(&cfg.out).context("scan relative-import candidates failed")?;
         tracing::info!(
@@ -134,7 +134,7 @@ mod commands {
             hits
         );
 
-        // 設定が有効なら最小の相対化を適用（.py/.pyi）
+        // Apply minimal relativization if enabled (.py/.pyi)
         if cfg.postprocess.relative_imports {
             let modified = apply_rewrites_in_tree(
                 &cfg.out,
@@ -672,7 +672,7 @@ mod doctor {
     pub fn run() -> Result<()> {
         let tools = [
             "python3", "uv", "protoc", "buf",
-            // grpc_tools.protoc は Python モジュールとして検出
+            // grpc_tools.protoc is detected as Python module
             "mypy", "pyright",
         ];
 
@@ -685,7 +685,7 @@ mod doctor {
             );
         }
 
-        // grpc_tools.protoc の確認
+        // Check grpc_tools.protoc availability
         let py = check("uv").unwrap_or_else(|| check("python3").unwrap_or_default());
         if py.is_empty() {
             println!("grpc_tools.protoc : skip (python not found)");
@@ -704,7 +704,7 @@ mod doctor {
             );
         }
 
-        // いずれも存在しない場合は非0を返す
+        // Return non-zero if none exist
         let any_found = [check("protoc"), check("buf")]
             .into_iter()
             .flatten()

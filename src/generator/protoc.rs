@@ -15,7 +15,7 @@ impl<'a> ProtocRunner<'a> {
     }
 
     pub fn generate(&self) -> Result<Vec<u8>> {
-        // 1) descriptor set を作成
+        // 1) Create descriptor set
         let fds = NamedTempFile::new().context("create temp file for descriptor set")?;
         let fds_path = fds.path().to_path_buf();
 
@@ -27,16 +27,16 @@ impl<'a> ProtocRunner<'a> {
             ));
         }
 
-        // include パス
+        // Include paths
         let mut args: Vec<String> = Vec::new();
         for inc in &self.cfg.include {
             args.push(format!("--proto_path={}", inc.display()));
         }
-        // inputs（globは Python 側に任せる設計だが、v0.1では文字列をそのまま渡す）
+        // Inputs (designed to delegate glob to Python, but v0.1 passes strings directly)
         let inputs = &self.cfg.inputs;
 
         // python -m grpc_tools.protoc ...
-        // 既定python_exe（uv/python3）を使う
+        // Use specified python_exe (uv/python3)
         let py = &self.cfg.python_exe;
         let mut cmd = Command::new(py);
         
@@ -63,11 +63,11 @@ impl<'a> ProtocRunner<'a> {
             }
         }
 
-        // 出力先
+        // Output directories
         cmd.arg(format!("--python_out={}", self.cfg.out.display()));
         cmd.arg(format!("--grpc_python_out={}", self.cfg.out.display()));
 
-        // mypy/mypy_grpc 出力（オプション）
+        // Optional mypy/mypy_grpc output
         if self.cfg.generate_mypy {
             cmd.arg(format!("--mypy_out={}", self.cfg.out.display()));
         }
@@ -75,11 +75,11 @@ impl<'a> ProtocRunner<'a> {
             cmd.arg(format!("--mypy_grpc_out={}", self.cfg.out.display()));
         }
 
-        // descriptor set 出力
+        // Descriptor set output
         cmd.arg("--include_imports");
         cmd.arg(format!("--descriptor_set_out={}", fds_path.display()));
 
-        // include と inputs
+        // Add include paths and process inputs
         for a in &args {
             cmd.arg(a);
         }
@@ -125,7 +125,7 @@ impl<'a> ProtocRunner<'a> {
             anyhow::bail!("grpc_tools.protoc failed: status {}", status);
         }
 
-        // FDS を読み込んで返却
+        // Read and return FDS
         let bytes = fs::read(&fds_path).context("failed to read descriptor_set_out")?;
         Ok(bytes)
     }

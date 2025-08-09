@@ -258,8 +258,8 @@ pub fn apply_rewrites_in_tree(
                 continue;
             }
             let content = fs::read_to_string(p).with_context(|| format!("read {}", p.display()))?;
-            // 事前フィルタ: allowed_basenames（FDS由来）が与えられていれば、
-            // 行単位で対象basenameが含まれないファイルはスキップ
+            // Pre-filter: if allowed_basenames (from FDS) are provided,
+            // skip files that don't contain any target basename
             if let Some(allowed) = allowed_basenames {
                 if !allowed.iter().any(|b| content.contains(b)) {
                     continue;
