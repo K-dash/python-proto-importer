@@ -2,6 +2,8 @@ use anyhow::Result;
 use clap::{Parser, Subcommand};
 use tracing_subscriber::EnvFilter;
 
+mod config;
+
 #[derive(Parser, Debug)]
 #[command(name = "proto-importer", version, about = "Python proto importer toolkit")] 
 struct Cli {
@@ -17,6 +19,31 @@ struct Cli {
 enum Commands {
     /// 環境診断（protoc / buf / grpc_tools / mypy / pyright など）
     Doctor,
+    /// 生成＋後処理＋検証
+    Build {
+        /// pyproject.toml のパス（省略時カレント）
+        #[arg(long)]
+        pyproject: Option<String>,
+        /// 生成後に検証をスキップ
+        #[arg(long)]
+        no_verify: bool,
+        /// 生成せず後処理・検証のみ（将来拡張用）
+        #[arg(long)]
+        postprocess_only: bool,
+    },
+    /// 生成せず import/mypy/pyright の検証のみ
+    Check {
+        #[arg(long)]
+        pyproject: Option<String>,
+    },
+    /// 出力とキャッシュの削除
+    Clean {
+        #[arg(long)]
+        pyproject: Option<String>,
+        /// 確認なしで削除
+        #[arg(long)]
+        yes: bool,
+    },
 }
 
 fn init_tracing(verbosity: u8) {
@@ -39,9 +66,55 @@ fn main() -> Result<()> {
 
     match cli.command {
         Commands::Doctor => doctor::run()?,
+        Commands::Build { pyproject, no_verify, postprocess_only } => {
+            commands::build(pyproject.as_deref(), no_verify, postprocess_only)?
+        }
+        Commands::Check { pyproject } => commands::check(pyproject.as_deref())?,
+        Commands::Clean { pyproject, yes } => commands::clean(pyproject.as_deref(), yes)?,
     }
 
     Ok(())
+}
+
+mod commands {
+    use super::config::AppConfig;
+    use anyhow::{bail, Context, Result};
+    use std::fs;
+    use std::path::Path;
+
+    pub fn build(pyproject: Option<&str>, no_verify: bool, _postprocess_only: bool) -> Result<()> {
+        let cfg = AppConfig::load(pyproject.map(Path::new)).context("failed to load config")?;
+        tracing::info!(?cfg.backend, out=%cfg.out.display(), "build start");
+        // v0.1: ここで protoc 実行と後処理を実装予定。現時点は雛形のみ。
+        if !no_verify {
+            verify(&cfg)?;
+        }
+        Ok(())
+    }
+
+    pub fn check(pyproject: Option<&str>) -> Result<()> {
+        let cfg = AppConfig::load(pyproject.map(Path::new)).context("failed to load config")?;
+        verify(&cfg)
+    }
+
+    pub fn clean(pyproject: Option<&str>, yes: bool) -> Result<()> {
+        let cfg = AppConfig::load(pyproject.map(Path::new)).context("failed to load config")?;
+        let out = &cfg.out;
+        if out.exists() {
+            if !yes {
+                bail!("refusing to remove {} without --yes", out.display());
+            }
+            tracing::info!("removing {}", out.display());
+            fs::remove_dir_all(out).with_context(|| format!("failed to remove {}", out.display()))?;
+        }
+        Ok(())
+    }
+
+    fn verify(cfg: &AppConfig) -> Result<()> {
+        // v0.1: 後段で import ドライラン / mypy / pyright を実装
+        tracing::info!("verify placeholder for {}", cfg.out.display());
+        Ok(())
+    }
 }
 
 mod doctor {
