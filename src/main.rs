@@ -89,6 +89,7 @@ fn main() -> Result<()> {
 mod commands {
     use super::config::{AppConfig, Backend};
     use super::generator::protoc::ProtocRunner;
+    use super::postprocess::apply::apply_rewrites_in_tree;
     use super::postprocess::create_packages;
     use super::postprocess::fds::load_fds_from_bytes;
     use super::postprocess::rel_imports::scan_and_report;
@@ -127,6 +128,16 @@ mod commands {
             files,
             hits
         );
+
+        // 設定が有効なら最小の相対化を適用（.py のみ）
+        if cfg.postprocess.protoletariat {
+            let modified = apply_rewrites_in_tree(&cfg.out, cfg.postprocess.exclude_google)
+                .context("apply relative-import rewrites failed")?;
+            tracing::info!(
+                "relative-import rewrites applied: {} files modified",
+                modified
+            );
+        }
 
         if !no_verify {
             verify(&cfg)?;
