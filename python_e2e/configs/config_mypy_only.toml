@@ -7,7 +7,15 @@ inputs = ["proto/**/*.proto"]
 out = "generated/mypy_only"
 mypy = true
 mypy_grpc = false
-postprocess = { protoletariat = true, fix_pyi = true, create_package = true, exclude_google = true, pyright_header = false }
+postprocess = { relative_imports = true, fix_pyi = true, create_package = true, exclude_google = true, pyright_header = false }
 
 [tool.python_proto_importer.verify]
-mypy_cmd = ["uv", "run", "mypy", "--strict", "--exclude", ".*_grpc\\.py$", "generated/mypy_only"]
+mypy_cmd = [
+    "uv",
+    "run",
+    "mypy",
+    "--strict",
+    "--exclude",
+    ".*_grpc\\.py$",
+    "generated/mypy_only",
+]

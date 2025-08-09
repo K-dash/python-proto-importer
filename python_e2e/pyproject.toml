@@ -2,10 +2,7 @@
 name = "proto_importer_e2e"
 version = "0.1.0"
 requires-python = ">=3.12,<3.13"
-dependencies = [
-  "grpcio==1.74.0",
-  "grpcio-tools==1.74.0",
-]
+dependencies = ["grpcio==1.74.0", "grpcio-tools==1.74.0"]
 
 [dependency-groups]
 dev = [
@@ -29,9 +26,7 @@ exclude = ["src/proto_importer_e2e/generated/**/*.py"]
 strict = true
 ignore_missing_imports = false
 # Exclude grpc files from strict checks as they are generated
-exclude = [
-    "src/proto_importer_e2e/generated/.*_grpc\\.py$",
-]
+exclude = ["src/proto_importer_e2e/generated/.*_grpc\\.py$"]
 
 [build-system]
 requires = ["hatchling"]
@@ -49,7 +44,7 @@ inputs = ["proto/**/*.proto"]
 out = "src/proto_importer_e2e/generated"
 mypy = true
 mypy_grpc = true
-postprocess = { protoletariat = true, fix_pyi = true, create_package = true, exclude_google = true, pyright_header = true }
+postprocess = { relative_imports = true, fix_pyi = true, create_package = true, exclude_google = true, pyright_header = true }
 
 [tool.python_proto_importer.verify]
 # verify types against generated stubs

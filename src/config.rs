@@ -26,7 +26,7 @@ pub struct AppConfig {
 #[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct PostProcess {
-    pub protoletariat: bool,
+    pub relative_imports: bool,
     pub fix_pyi: bool,
     pub create_package: bool,
     pub exclude_google: bool,
@@ -77,7 +77,7 @@ struct ImporterCore {
 #[allow(dead_code)]
 #[derive(Deserialize)]
 struct PostProcessToml {
-    protoletariat: Option<bool>,
+    relative_imports: Option<bool>,
     fix_pyi: Option<bool>,
     create_package: Option<bool>,
     exclude_google: Option<bool>,
@@ -148,7 +148,7 @@ impl AppConfig {
         let generate_mypy_grpc = importer.core.mypy_grpc.unwrap_or(false);
 
         let pp = importer.core.postprocess.unwrap_or(PostProcessToml {
-            protoletariat: Some(true),
+            relative_imports: Some(true),
             fix_pyi: Some(true),
             create_package: Some(true),
             exclude_google: Some(true),
@@ -156,7 +156,7 @@ impl AppConfig {
             module_suffixes: None,
         });
         let postprocess = PostProcess {
-            protoletariat: pp.protoletariat.unwrap_or(true),
+            relative_imports: pp.relative_imports.unwrap_or(true),
             fix_pyi: pp.fix_pyi.unwrap_or(true),
             create_package: pp.create_package.unwrap_or(true),
             exclude_google: pp.exclude_google.unwrap_or(true),
@@ -218,7 +218,7 @@ inputs = ["proto/**/*.proto"]
         assert_eq!(config.out, PathBuf::from("generated/python"));
         assert!(!config.generate_mypy);
         assert!(!config.generate_mypy_grpc);
-        assert!(config.postprocess.protoletariat);
+        assert!(config.postprocess.relative_imports);
         assert!(config.postprocess.fix_pyi);
         assert!(config.postprocess.create_package);
         assert!(config.postprocess.exclude_google);
@@ -247,7 +247,7 @@ mypy = true
 mypy_grpc = true
 
 [tool.python_proto_importer.postprocess]
-protoletariat = false
+relative_imports = false
 fix_pyi = false
 create_package = false
 exclude_google = false
@@ -273,7 +273,7 @@ pyright_cmd = ["pyright", "generated"]
         assert_eq!(config.out, PathBuf::from("src/generated"));
         assert!(config.generate_mypy);
         assert!(config.generate_mypy_grpc);
-        assert!(!config.postprocess.protoletariat);
+        assert!(!config.postprocess.relative_imports);
         assert!(!config.postprocess.fix_pyi);
         assert!(!config.postprocess.create_package);
         assert!(!config.postprocess.exclude_google);

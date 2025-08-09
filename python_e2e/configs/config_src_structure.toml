@@ -8,4 +8,4 @@ inputs = ["src/proto_importer_e2e/proto/**/*.proto"]
 out = "src/proto_importer_e2e/generated"
 mypy = false
 mypy_grpc = false
-postprocess = { protoletariat = true, fix_pyi = false, create_package = true, exclude_google = true, pyright_header = false }
+postprocess = { relative_imports = true, fix_pyi = false, create_package = true, exclude_google = true, pyright_header = false }
