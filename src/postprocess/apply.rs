@@ -32,8 +32,15 @@ fn split_module_qualname(qualified: &str) -> (String, String) {
 }
 
 fn compute_relative_import_prefix(from_dir: &Path, to_dir: &Path) -> Option<(usize, String)> {
-    let from = from_dir.components().collect::<Vec<_>>();
-    let to = to_dir.components().collect::<Vec<_>>();
+    // Try canonicalize to normalize symlinks and relative segments; fall back to raw paths
+    let canonicalize_or = |p: &Path| -> PathBuf {
+        std::fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf())
+    };
+    let from_c = canonicalize_or(from_dir);
+    let to_c = canonicalize_or(to_dir);
+
+    let from = from_c.components().collect::<Vec<_>>();
+    let to = to_c.components().collect::<Vec<_>>();
     let mut i = 0usize;
     while i < from.len() && i < to.len() && from[i] == to[i] {
         i += 1;
@@ -552,6 +559,40 @@ mod tests {
         let to = Path::new("generated/order");
         let (ups, rem) = compute_relative_import_prefix(from, to).unwrap();
         assert_eq!(ups, 1); // Go up one level to parent, then down to sibling
+        assert_eq!(rem, "order");
+    }
+
+    #[test]
+    fn compute_prefix_with_relative_segments() {
+        // from: ./a/./b, to: a/c/../c/d -> expect up 1 and remainder c.d
+        let tmp = tempdir().unwrap();
+        let root = tmp.path();
+        std::fs::create_dir_all(root.join("a/b")).unwrap();
+        std::fs::create_dir_all(root.join("a/c/d")).unwrap();
+
+        let from = root.join("./a/./b");
+        let to = root.join("a/c/../c/d");
+        let (ups, rem) = compute_relative_import_prefix(&from, &to).unwrap();
+        assert_eq!(ups, 1);
+        assert_eq!(rem, "c.d");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn compute_prefix_with_symlink() {
+        use std::os::unix::fs::symlink;
+        let tmp = tempdir().unwrap();
+        let root = tmp.path();
+        std::fs::create_dir_all(root.join("real/order")).unwrap();
+        std::fs::create_dir_all(root.join("real/billing")).unwrap();
+        // symlink 'gen' -> 'real'
+        symlink(root.join("real"), root.join("gen")).unwrap();
+
+        let from = root.join("gen/billing");
+        let to = root.join("real/order");
+        let (ups, rem) = compute_relative_import_prefix(&from, &to).unwrap();
+        // After canonicalize, common prefix is root/real, expect up 1 and remainder order
+        assert_eq!(ups, 1);
         assert_eq!(rem, "order");
     }
 

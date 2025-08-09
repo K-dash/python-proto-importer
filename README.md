@@ -163,6 +163,15 @@ module_suffixes = ["_pb2.py", "_pb2.pyi", "_pb2_grpc.py", "_pb2_grpc.pyi"]
   - Mixed lists are split: rewritten items go to a relative `from` line; non-target items remain as their original import.
   - Rewrites only apply if the target module file exists under the configured `out` tree.
 
+#### Path Resolution Robustness
+
+- The tool computes relative import prefixes using canonicalized paths (`realpath`),
+  which reduces inconsistencies from relative segments (e.g., `./`, `../`) and
+  symlinks. If canonicalization fails (non-existent paths, permission), it falls
+  back to a best-effort relative computation.
+- Practical tip: ensure your generated tree exists before postprocessing so the
+  canonicalization can establish a stable common prefix.
+
 ### Verification Configuration
 
 The `[tool.python_proto_importer.verify]` section configures optional verification commands:

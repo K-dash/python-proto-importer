@@ -146,6 +146,28 @@ inputs = ["api/definitions/**/*.proto"]
 module_suffixes = ["_pb2.py", "_pb2.pyi", "_pb2_grpc.py", "_pb2_grpc.pyi"]
 ```
 
+#### Import 書き換えの対象範囲と制限
+
+- 対応パターン:
+  - `import pkg.module_pb2` / `import pkg.module_pb2 as alias`
+  - `import pkg.mod1_pb2, pkg.sub.mod2_pb2 as alias`（複数を分割して相対 from に展開）
+  - `from pkg import module_pb2` / `from pkg import module_pb2 as alias`
+  - `from pkg import mod1_pb2, mod2_pb2 as alias`
+  - `from pkg import (\n    mod1_pb2,\n    mod2_pb2 as alias,\n  )`
+- 除外/既知の挙動:
+  - `exclude_google = true`（既定）時は `google.protobuf.*` を変更しません。
+  - 括弧による改行は対応しますが、バックスラッシュ（`\\`）による行継続は未対応です。
+  - `_pb2` / `_pb2_grpc` に一致するモジュールのみ対象です。
+  - 混在リストは、対象は相対 from 行、非対象は元の import 行として分離出力します。
+  - 書き換えは、対象モジュールが `out` 配下に実在する場合にのみ行われます。
+
+#### パス解決の堅牢化
+
+- 相対 import の算出にはパスの `canonicalize`（実体パス化）を利用し、`./` や `../`、
+  シンボリックリンクによる不整合を低減しています。`canonicalize` が失敗する場合
+  （パスが未作成・権限不足など）は、従来の相対計算にフォールバックします。
+- 実際に利用する際は、後処理前に生成ツリーが存在していることを確認すると安定します。
+
 ### 検証設定
 
 `[tool.python_proto_importer.verify]`セクションはオプションの検証コマンドを設定します：
