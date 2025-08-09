@@ -58,12 +58,53 @@ fn rewrite_lines_in_content(
     )
     .unwrap();
     let re_from = Regex::new(r"^(?P<indent>\s*)from\s+(?P<pkg>[A-Za-z0-9_\.]+)\s+import\s+(?P<name>[A-Za-z0-9_]+)(?:\s+as\s+(?P<alias>[A-Za-z0-9_]+))?\s*$").unwrap();
+    let re_import_simple =
+        Regex::new(r"^(?P<indent>\s*)import\s+(?P<mod>[A-Za-z0-9_\.]+)\s*$").unwrap();
 
     for line in content.lines() {
         if line.trim_start().starts_with("from .") {
             out.push_str(line);
             out.push('\n');
             continue;
+        }
+        if let Some(caps) = re_import_simple.captures(line) {
+            let indent = &caps["indent"];
+            let module = &caps["mod"];
+            if !module.ends_with("_pb2") && !module.ends_with("_pb2_grpc") {
+                out.push_str(line);
+                out.push('\n');
+                continue;
+            }
+            if exclude_google && module.starts_with("google.protobuf") {
+                out.push_str(line);
+                out.push('\n');
+                continue;
+            }
+            let target = path_from_module(root, "", module);
+            if !target.exists() {
+                out.push_str(line);
+                out.push('\n');
+                continue;
+            }
+            if let Some((ups, remainder)) =
+                compute_relative_import_prefix(file_dir, target.parent().unwrap_or(root))
+            {
+                let dots = if ups == 0 {
+                    ".".to_string()
+                } else {
+                    ".".repeat(ups)
+                };
+                let from_pkg = if remainder.is_empty() {
+                    dots
+                } else {
+                    format!("{dots}{remainder}")
+                };
+                let new_line = format!("{indent}from {from_pkg} import {module}");
+                out.push_str(&new_line);
+                out.push('\n');
+                changed = true;
+                continue;
+            }
         }
 
         if let Some(caps) = re_import.captures(line) {
@@ -159,11 +200,26 @@ fn rewrite_lines_in_content(
 }
 
 #[allow(dead_code)]
-pub fn apply_rewrites_in_tree(root: &Path, exclude_google: bool) -> Result<usize> {
+pub fn apply_rewrites_in_tree(
+    root: &Path,
+    exclude_google: bool,
+    module_suffixes: &[String],
+) -> Result<usize> {
     let mut modified = 0usize;
     for entry in WalkDir::new(root).into_iter().filter_map(Result::ok) {
         let p = entry.path();
-        if p.is_file() && p.extension().and_then(|e| e.to_str()) == Some("py") {
+        if p.is_file() {
+            let rel = p.strip_prefix(root).unwrap_or(p).to_string_lossy();
+            let mut matched = false;
+            for s in module_suffixes {
+                if (s.ends_with(".py") || s.ends_with(".pyi")) && rel.ends_with(s) {
+                    matched = true;
+                    break;
+                }
+            }
+            if !matched {
+                continue;
+            }
             let content = fs::read_to_string(p).with_context(|| format!("read {}", p.display()))?;
             let (new_content, changed) = rewrite_lines_in_content(
                 &content,

@@ -131,8 +131,12 @@ mod commands {
 
         // 設定が有効なら最小の相対化を適用（.py のみ）
         if cfg.postprocess.protoletariat {
-            let modified = apply_rewrites_in_tree(&cfg.out, cfg.postprocess.exclude_google)
-                .context("apply relative-import rewrites failed")?;
+            let modified = apply_rewrites_in_tree(
+                &cfg.out,
+                cfg.postprocess.exclude_google,
+                &cfg.postprocess.module_suffixes,
+            )
+            .context("apply relative-import rewrites failed")?;
             tracing::info!(
                 "relative-import rewrites applied: {} files modified",
                 modified
