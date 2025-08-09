@@ -71,11 +71,12 @@ fn rewrite_lines_in_content(
     )
     .unwrap();
     let re_from = Regex::new(r"^(?P<indent>\s*)from\s+(?P<pkg>[A-Za-z0-9_\.]+)\s+import\s+(?P<name>[A-Za-z0-9_]+)(?:\s+as\s+(?P<alias>[A-Za-z0-9_]+))?\s*(?:#.*)?$").unwrap();
-    let re_from_any = Regex::new(r"^(?P<indent>\s*)from\s+(?P<pkg>[A-Za-z0-9_\.]+)\s+import\s+(?P<rest>.*)$").unwrap();
+    let re_from_any =
+        Regex::new(r"^(?P<indent>\s*)from\s+(?P<pkg>[A-Za-z0-9_\.]+)\s+import\s+(?P<rest>.*)$")
+            .unwrap();
     let re_import_simple =
         Regex::new(r"^(?P<indent>\s*)import\s+(?P<mod>[A-Za-z0-9_\.]+)\s*(?:#.*)?$").unwrap();
-    let re_import_list =
-        Regex::new(r"^(?P<indent>\s*)import\s+(?P<rest>.+)$").unwrap();
+    let re_import_list = Regex::new(r"^(?P<indent>\s*)import\s+(?P<rest>.+)$").unwrap();
 
     // State for collecting parenthesized multi-line 'from ... import (...)' blocks
     let mut pending_from_block: Option<(String, String, String)> = None; // (indent, pkg, collected)
@@ -83,7 +84,7 @@ fn rewrite_lines_in_content(
     for line in content.lines() {
         // Handle continuation of a parenthesized from-import block
         if let Some((indent, pkg, mut collected)) = pending_from_block.take() {
-            collected.push_str("\n");
+            collected.push('\n');
             collected.push_str(line);
             // Check if parentheses are balanced now
             let opens = collected.matches('(').count();
@@ -159,28 +160,45 @@ fn rewrite_lines_in_content(
                 let mut any_local_change = false;
                 for tok in rest.split(',') {
                     let token = tok.trim();
-                    if token.is_empty() { continue; }
+                    if token.is_empty() {
+                        continue;
+                    }
                     // token: module[ as alias]
                     let mut parts = token.split_whitespace().collect::<Vec<_>>();
-                    if parts.is_empty() { continue; }
+                    if parts.is_empty() {
+                        continue;
+                    }
                     // reconstruct alias if provided
                     let mut alias: Option<&str> = None;
-                    if parts.len() >= 3 && parts[parts.len()-2] == "as" {
-                        alias = Some(parts[parts.len()-1]);
-                        parts.truncate(parts.len()-2);
+                    if parts.len() >= 3 && parts[parts.len() - 2] == "as" {
+                        alias = Some(parts[parts.len() - 1]);
+                        parts.truncate(parts.len() - 2);
                     }
                     let module = parts.join(" ");
-                    if (module.ends_with("_pb2") || module.ends_with("_pb2_grpc")) && !(exclude_google && module.starts_with("google.protobuf")) {
+                    if (module.ends_with("_pb2") || module.ends_with("_pb2_grpc"))
+                        && !(exclude_google && module.starts_with("google.protobuf"))
+                    {
                         let (module_path, leaf) = split_module_qualname(&module);
                         let target = path_from_module(root, &module_path, &leaf);
                         if target.exists() {
-                            if let Some((ups, remainder)) = compute_relative_import_prefix(file_dir, target.parent().unwrap_or(root)) {
+                            if let Some((ups, remainder)) = compute_relative_import_prefix(
+                                file_dir,
+                                target.parent().unwrap_or(root),
+                            ) {
                                 let dots = ".".repeat(ups + 1);
-                                let from_pkg = if remainder.is_empty() { dots } else { format!("{dots}{remainder}") };
-                                if let Some(a) = alias {
-                                    out.push_str(&format!("{indent}from {from_pkg} import {leaf} as {a}\n"));
+                                let from_pkg = if remainder.is_empty() {
+                                    dots
                                 } else {
-                                    out.push_str(&format!("{indent}from {from_pkg} import {leaf}\n"));
+                                    format!("{dots}{remainder}")
+                                };
+                                if let Some(a) = alias {
+                                    out.push_str(&format!(
+                                        "{indent}from {from_pkg} import {leaf} as {a}\n"
+                                    ));
+                                } else {
+                                    out.push_str(&format!(
+                                        "{indent}from {from_pkg} import {leaf}\n"
+                                    ));
                                 }
                                 changed = true;
                                 any_local_change = true;
@@ -191,7 +209,9 @@ fn rewrite_lines_in_content(
                     // Fallback: keep original token as a separate import line
                     out.push_str(&format!("{indent}import {token}\n"));
                 }
-                if any_local_change { continue; }
+                if any_local_change {
+                    continue;
+                }
             }
         }
 
@@ -305,7 +325,8 @@ fn rewrite_lines_in_content(
             }
             if rest.contains(',') || rest.starts_with('(') {
                 // Process possibly parenthesized single-line list
-                let processed = process_from_import_list(&indent, &pkg, line, file_dir, root, exclude_google)?;
+                let processed =
+                    process_from_import_list(&indent, &pkg, line, file_dir, root, exclude_google)?;
                 out.push_str(&processed.output);
                 changed |= processed.changed;
                 continue;
@@ -345,10 +366,10 @@ fn process_from_import_list(
     exclude_google: bool,
 ) -> Result<FromImportProcessResult> {
     // Extract everything after 'from <pkg> import'
-    let after_import = match full_line_or_block.splitn(2, " import ").nth(1) {
-        Some(s) => s.trim(),
-        None => full_line_or_block.trim(),
-    };
+    let after_import = full_line_or_block
+        .split_once(" import ")
+        .map(|(_, s)| s.trim())
+        .unwrap_or_else(|| full_line_or_block.trim());
 
     // Remove wrapping parentheses and trailing comment lines
     let mut inner = after_import.trim();
@@ -358,22 +379,30 @@ fn process_from_import_list(
         inner = inner.trim_start_matches('(');
         inner = inner.trim_end();
         if inner.ends_with(')') {
-            inner = &inner[..inner.len()-1];
+            inner = &inner[..inner.len() - 1];
         }
     }
 
     // Split by commas across potential multi-lines
     let mut tokens: Vec<String> = Vec::new();
     for raw in inner.lines() {
-        let no_comment = match raw.find('#') { Some(idx) => &raw[..idx], None => raw };
+        let no_comment = match raw.find('#') {
+            Some(idx) => &raw[..idx],
+            None => raw,
+        };
         for part in no_comment.split(',') {
             let t = part.trim();
-            if !t.is_empty() { tokens.push(t.to_string()); }
+            if !t.is_empty() {
+                tokens.push(t.to_string());
+            }
         }
     }
 
     if tokens.is_empty() {
-        return Ok(FromImportProcessResult { output: format!("{}from {} import {}\n", indent, pkg, inner.trim()), changed: false });
+        return Ok(FromImportProcessResult {
+            output: format!("{}from {} import {}\n", indent, pkg, inner.trim()),
+            changed: false,
+        });
     }
 
     // Partition into rewritable and others
@@ -384,10 +413,12 @@ fn process_from_import_list(
         let mut name = tok.as_str();
         let mut alias: Option<String> = None;
         if let Some(pos) = tok.rfind(" as ") {
-            name = &tok[..pos].trim();
-            alias = Some(tok[pos+4..].trim().to_string());
+            name = tok[..pos].trim();
+            alias = Some(tok[pos + 4..].trim().to_string());
         }
-        if (name.ends_with("_pb2") || name.ends_with("_pb2_grpc")) && !(exclude_google && pkg.starts_with("google.protobuf")) {
+        if (name.ends_with("_pb2") || name.ends_with("_pb2_grpc"))
+            && !(exclude_google && pkg.starts_with("google.protobuf"))
+        {
             // Check target exists
             let target = path_from_module(root, pkg, name);
             if target.exists() {
@@ -400,21 +431,37 @@ fn process_from_import_list(
 
     if rewrite_items.is_empty() {
         // No change
-        return Ok(FromImportProcessResult { output: format!("{}{}\n", indent, full_line_or_block.trim()), changed: false });
+        return Ok(FromImportProcessResult {
+            output: format!("{}{}\n", indent, full_line_or_block.trim()),
+            changed: false,
+        });
     }
 
     // Compute relative from-pkg using any one item's target (they share pkg)
     let any_name = &rewrite_items[0].0;
     let target = path_from_module(root, pkg, any_name);
-    let (ups, remainder) = compute_relative_import_prefix(file_dir, target.parent().unwrap_or(root)).unwrap_or((0, String::new()));
-    let dots = if ups == 0 { ".".to_string() } else { ".".repeat(ups + 1) };
-    let from_pkg = if remainder.is_empty() { dots } else { format!("{dots}{remainder}") };
+    let (ups, remainder) =
+        compute_relative_import_prefix(file_dir, target.parent().unwrap_or(root))
+            .unwrap_or((0, String::new()));
+    let dots = if ups == 0 {
+        ".".to_string()
+    } else {
+        ".".repeat(ups + 1)
+    };
+    let from_pkg = if remainder.is_empty() {
+        dots
+    } else {
+        format!("{dots}{remainder}")
+    };
 
     // Build output lines: first the rewritten relative import
     let mut output = String::new();
     let list = rewrite_items
         .into_iter()
-        .map(|(n, a)| match a { Some(x) => format!("{} as {}", n, x), None => n })
+        .map(|(n, a)| match a {
+            Some(x) => format!("{} as {}", n, x),
+            None => n,
+        })
         .collect::<Vec<_>>()
         .join(", ");
     output.push_str(&format!("{}from {} import {}\n", indent, from_pkg, list));
@@ -425,7 +472,10 @@ fn process_from_import_list(
         output.push_str(&format!("{}from {} import {}\n", indent, pkg, keep_list));
     }
 
-    Ok(FromImportProcessResult { output, changed: true })
+    Ok(FromImportProcessResult {
+        output,
+        changed: true,
+    })
 }
 
 #[allow(dead_code)]
@@ -605,8 +655,15 @@ mod tests {
         // Should produce two from-import lines and keep 'json' as import
         let lines: Vec<_> = out.lines().collect();
         assert_eq!(lines.len(), 3);
-        assert!(lines[0].starts_with("from .pkg import a_pb2") || lines[1].starts_with("from .pkg import a_pb2"));
-        assert!(lines.iter().any(|l| l.starts_with("from .pkg.sub import b_pb2 as bb")));
+        assert!(
+            lines[0].starts_with("from .pkg import a_pb2")
+                || lines[1].starts_with("from .pkg import a_pb2")
+        );
+        assert!(
+            lines
+                .iter()
+                .any(|l| l.starts_with("from .pkg.sub import b_pb2 as bb"))
+        );
         assert!(lines.iter().any(|l| *l == "import json"));
     }
 
