@@ -35,14 +35,24 @@ mypy_cmd = ["uv", "run", "mypy", "--strict", "generated/python"]
 pyright_cmd = ["uv", "run", "pyright", "generated/python"]
 ```
 
-## E2E テスト（任意実行）
+## Buf backend の設定例（v0.2 予定）
 
-本リポジトリには、生成→相対化の流れを検証する E2E テストが含まれます。
+`buf generate` 対応は v0.2 で追加予定です。暫定の設定例は次の通りです。
 
-```bash
-# 前提: python_exe に grpcio-tools が入っていること（python3 または uv）
-E2E_RUN=1 cargo test --test e2e_smoke
+```toml
+[tool.python_proto_importer]
+backend = "buf"
+buf_gen_yaml = "buf.gen.yaml"
+postprocess = { protoletariat = true, fix_pyi = true, create_package = true, exclude_google = true }
+
+[tool.python_proto_importer.verify]
+# プロジェクトに応じて調整してください
+mypy_cmd = ["uv", "run", "mypy", "--strict", "gen/python"]
 ```
+
+## コントリビュート
+
+E2E テストの実行手順を含む開発者向けドキュメントは、[CONTRIBUTING.md](../CONTRIBUTING.md) を参照してください。
 
 ## 制限事項
 

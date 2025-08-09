@@ -21,4 +21,5 @@ args = ["build", "--all-targets"]
 
 [tasks.test]
 command = "cargo"
+env = { E2E_RUN = "1" }
 args = ["test", "--all"]

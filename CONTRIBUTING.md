@@ -13,15 +13,6 @@ Thanks for your interest in contributing!
     - Example with uv: `uv pip install grpcio-tools`
     - Example with pip: `python3 -m pip install grpcio-tools`
 
-## End-to-End Test
-
-This repository includes an opt-in E2E test validating the full flow (generation → relative import rewriting).
-
-```bash
-# prerequisites: grpcio-tools available to your python_exe (python3 or uv)
-E2E_RUN=1 cargo test --test e2e_smoke
-```
-
 ## Dev Workflow
 
 - Run formatting and lint before committing (requires `cargo-make`):

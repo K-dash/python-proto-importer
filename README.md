@@ -56,7 +56,9 @@ postprocess = { protoletariat = true, fix_pyi = true, create_package = true, exc
 mypy_cmd = ["uv", "run", "mypy", "--strict", "gen/python"]
 ```
 
-For E2E test instructions, see [CONTRIBUTING.md](CONTRIBUTING.md).
+## Contribute
+
+[CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Limitations
 
