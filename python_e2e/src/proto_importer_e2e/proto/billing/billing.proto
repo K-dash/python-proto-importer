@@ -1,0 +1,47 @@
+syntax = "proto3";
+
+package billing;
+
+import "order/order.proto";
+
+message ProcessPaymentRequest {
+  string order_id = 1;
+  PaymentMethod payment_method = 2;
+  double amount = 3;
+  repeated order.OrderItem items = 4;  // Use type from order.proto
+}
+
+message ProcessPaymentResponse {
+  string payment_id = 1;
+  PaymentStatus status = 2;
+  string transaction_id = 3;
+}
+
+message PaymentMethod {
+  oneof method {
+    CreditCard credit_card = 1;
+    BankTransfer bank_transfer = 2;
+  }
+}
+
+message CreditCard {
+  string card_number = 1;
+  string expiry_date = 2;
+  string cvv = 3;
+}
+
+message BankTransfer {
+  string account_number = 1;
+  string routing_number = 2;
+}
+
+enum PaymentStatus {
+  PAYMENT_PENDING = 0;
+  PAYMENT_SUCCESS = 1;
+  PAYMENT_FAILED = 2;
+  PAYMENT_CANCELLED = 3;
+}
+
+service BillingService {
+  rpc ProcessPayment(ProcessPaymentRequest) returns (ProcessPaymentResponse);
+}

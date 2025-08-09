@@ -1,0 +1,21 @@
+syntax = "proto3";
+package user.v1;
+
+// google proto imports
+import "google/protobuf/timestamp.proto";
+
+enum UserRole {
+  USER_ROLE_UNKNOWN = 0;
+  USER_ROLE_ADMIN = 1;
+  USER_ROLE_USER = 2;
+  USER_ROLE_GUEST = 3;
+}
+
+message User {
+  string id = 1;
+  string email = 2;
+  string name = 3;
+  UserRole role = 4;
+  google.protobuf.Timestamp created_at = 5;
+  google.protobuf.Timestamp updated_at = 6;
+}

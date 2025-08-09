@@ -1,4 +1,0 @@
-syntax = "proto3";
-package payment.v1;
-
-message Foo { string x = 1; }

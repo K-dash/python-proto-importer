@@ -1,0 +1,15 @@
+syntax = "proto3";
+package payment.v1;
+
+enum PaymentStatus {
+  PAYMENT_STATUS_UNKNOWN = 0;
+  PAYMENT_STATUS_PENDING = 1;
+  PAYMENT_STATUS_COMPLETED = 2;
+  PAYMENT_STATUS_FAILED = 3;
+  PAYMENT_STATUS_CANCELLED = 4;
+}
+
+message PaymentMethod {
+  string type = 1;
+  string details = 2;
+}

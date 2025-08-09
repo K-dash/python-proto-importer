@@ -1,0 +1,17 @@
+syntax = "proto3";
+package payment.v1;
+
+import "proto/payment/types.proto";
+
+message GetPaymentRequest { string payment_id = 1; }
+
+message GetPaymentResponse {
+  string payment_id = 1;
+  PaymentStatus status = 2;
+  double amount = 3;
+  string currency = 4;
+}
+
+service PaymentService {
+  rpc GetPayment(GetPaymentRequest) returns (GetPaymentResponse);
+}

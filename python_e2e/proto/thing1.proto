@@ -1,7 +1,0 @@
-syntax = "proto3";
-package payment.v1;
-
-import "proto/thing2.proto";
-
-message GetPaymentRequest { string id = 1; }
-message GetPaymentResponse { string id = 1; }
