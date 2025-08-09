@@ -218,6 +218,23 @@ mypy_cmd = ["uv", "run", "mypy", "--strict", "--exclude", ".*_grpc\\.py$", "src/
 pyright_cmd = ["uv", "run", "pyright", "src/generated/**/*.pyi"]
 ```
 
+Note: For pyright, we recommend focusing on `.pyi` stubs (as shown) to avoid warnings from generated `.py` that intentionally reference experimental or dynamically provided attributes.
+
+### Pyi-only Verification Example
+
+```toml
+[tool.python_proto_importer]
+backend = "protoc"
+include = ["proto"]
+inputs = ["proto/**/*.proto"]
+out = "generated/python"
+mypy = true
+
+[tool.python_proto_importer.verify]
+# Validate only the generated stubs with pyright
+pyright_cmd = ["uv", "run", "pyright", "generated/python/**/*.pyi"]
+```
+
 ### Namespace Package Configuration (PEP 420)
 
 ```toml
@@ -384,6 +401,8 @@ out = "generated"
 - **v0.1 limitations**:
   - Only `protoc` backend is supported. `buf generate` support is planned for v0.2.
   - Import rewriting targets common `_pb2(_grpc)?.py[i]` patterns; broader coverage is added incrementally with tests.
+  - Import dry-run verifies only generated `.py` modules (excluding `__init__.py`). `.pyi` files are not imported and should be validated via type checkers (e.g., configure `pyright_cmd` to point at `**/*.pyi`).
+  - The `fix_pyi` flag is reserved for future use in v0.1 and currently has no effect.
 - **Known behaviors**:
   - When using multiple `include` paths with files of the same name, protoc may report "shadowing" errors. Use selective `inputs` patterns to avoid this.
   - Generated file structure follows protoc conventions: files are placed relative to their `--proto_path`.
