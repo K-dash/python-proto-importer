@@ -35,3 +35,168 @@ pub fn collect_generated_basenames_from_bytes(bytes: &[u8]) -> Result<HashSet<St
     }
     Ok(set)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use prost::Message;
+    use prost_types::{FileDescriptorProto, FileDescriptorSet};
+
+    #[test]
+    fn is_proto_generated_module_pb2() {
+        assert!(is_proto_generated_module("service_pb2"));
+        assert!(is_proto_generated_module("api.v1.service_pb2"));
+        assert!(!is_proto_generated_module("service"));
+        assert!(!is_proto_generated_module("service_pb2.something"));
+    }
+
+    #[test]
+    fn is_proto_generated_module_grpc() {
+        assert!(is_proto_generated_module("service_pb2_grpc"));
+        assert!(is_proto_generated_module("api.v1.service_pb2_grpc"));
+        assert!(!is_proto_generated_module("service_grpc"));
+        assert!(!is_proto_generated_module("service_pb2_grpc.something"));
+    }
+
+    #[test]
+    fn collect_generated_basenames_empty() {
+        let fds = FileDescriptorSet { file: vec![] };
+        let bytes = fds.encode_to_vec();
+
+        let result = collect_generated_basenames_from_bytes(&bytes).unwrap();
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn collect_generated_basenames_single_file() {
+        let file = FileDescriptorProto {
+            name: Some("service/api.proto".to_string()),
+            ..Default::default()
+        };
+        let fds = FileDescriptorSet { file: vec![file] };
+        let bytes = fds.encode_to_vec();
+
+        let result = collect_generated_basenames_from_bytes(&bytes).unwrap();
+        let expected = ["api_pb2", "api_pb2_grpc"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn collect_generated_basenames_multiple_files() {
+        let files = vec![
+            FileDescriptorProto {
+                name: Some("service/user.proto".to_string()),
+                ..Default::default()
+            },
+            FileDescriptorProto {
+                name: Some("api/payment.proto".to_string()),
+                ..Default::default()
+            },
+            FileDescriptorProto {
+                name: Some("common.proto".to_string()),
+                ..Default::default()
+            },
+        ];
+        let fds = FileDescriptorSet { file: files };
+        let bytes = fds.encode_to_vec();
+
+        let result = collect_generated_basenames_from_bytes(&bytes).unwrap();
+        let expected = [
+            "user_pb2",
+            "user_pb2_grpc",
+            "payment_pb2",
+            "payment_pb2_grpc",
+            "common_pb2",
+            "common_pb2_grpc",
+        ]
+        .iter()
+        .map(|s| s.to_string())
+        .collect();
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn collect_generated_basenames_file_without_name() {
+        let files = vec![
+            FileDescriptorProto {
+                name: Some("valid.proto".to_string()),
+                ..Default::default()
+            },
+            FileDescriptorProto {
+                name: None, // This file has no name
+                ..Default::default()
+            },
+        ];
+        let fds = FileDescriptorSet { file: files };
+        let bytes = fds.encode_to_vec();
+
+        let result = collect_generated_basenames_from_bytes(&bytes).unwrap();
+        // Should only include basenames from files with valid names
+        let expected = ["valid_pb2", "valid_pb2_grpc"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn collect_generated_basenames_nested_paths() {
+        let file = FileDescriptorProto {
+            name: Some("deeply/nested/path/service.proto".to_string()),
+            ..Default::default()
+        };
+        let fds = FileDescriptorSet { file: vec![file] };
+        let bytes = fds.encode_to_vec();
+
+        let result = collect_generated_basenames_from_bytes(&bytes).unwrap();
+        let expected = ["service_pb2", "service_pb2_grpc"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn collect_generated_basenames_invalid_bytes() {
+        let invalid_bytes = b"invalid protobuf data";
+        let result = collect_generated_basenames_from_bytes(invalid_bytes);
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("decode FDS via prost-types failed")
+        );
+    }
+
+    #[test]
+    fn load_fds_from_bytes_valid() {
+        // Create a minimal valid FileDescriptorSet
+        let file = FileDescriptorProto {
+            name: Some("test.proto".to_string()),
+            package: Some("test".to_string()),
+            ..Default::default()
+        };
+        let fds = FileDescriptorSet { file: vec![file] };
+        let bytes = fds.encode_to_vec();
+
+        let result = load_fds_from_bytes(&bytes);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn load_fds_from_bytes_invalid() {
+        let invalid_bytes = b"not a valid protobuf";
+        let result = load_fds_from_bytes(invalid_bytes);
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("failed to decode FileDescriptorSet")
+        );
+    }
+}

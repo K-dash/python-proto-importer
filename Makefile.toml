@@ -1,11 +1,11 @@
 [config]
-default_to_workspace = false
+skip_core_tasks = true
 
 [tasks.default]
 run_task = { name = ["format", "lint"], parallel = true }
 
 [tasks.all]
-run_task = { name = ["format", "lint", "test"], parallel = true }
+run_task = { name = ["format", "lint", "test-all"], parallel = true }
 
 [tasks.format]
 command = "cargo"
@@ -19,7 +19,15 @@ args = ["clippy", "--all-targets", "--all-features", "--", "-Dwarnings"]
 command = "cargo"
 args = ["build", "--all-targets"]
 
+[tasks.test-all]
+run_task = { name = ["test", "python-e2e"] }
+
 [tasks.test]
 command = "cargo"
-env = { E2E_RUN = "1" }
 args = ["test", "--all"]
+
+[tasks.python-e2e]
+script_runner = "@shell"
+script = '''
+pushd python_e2e && makers test && popd
+'''

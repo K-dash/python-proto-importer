@@ -183,7 +183,7 @@ fn rewrite_lines_in_content(
                 compute_relative_import_prefix(file_dir, target.parent().unwrap_or(root))
             {
                 // ups=0 -> same level (use "." + remainder)
-                // ups=1 -> parent level (use ".." + remainder) 
+                // ups=1 -> parent level (use ".." + remainder)
                 let dots = if ups == 0 {
                     ".".to_string()
                 } else {
@@ -374,20 +374,23 @@ mod tests {
         // Test the actual scenario: billing/ importing from order/
         let dir = tempdir().unwrap();
         let root = dir.path();
-        
+
         // Create structure: generated/billing/ and generated/order/
         fs::create_dir_all(root.join("billing")).unwrap();
         fs::create_dir_all(root.join("order")).unwrap();
         fs::write(root.join("order/order_pb2.py"), "# order module\n").unwrap();
-        
+
         let billing_content = "from order import order_pb2 as order_dot_order__pb2\n";
         fs::write(root.join("billing/billing_pb2.py"), billing_content).unwrap();
-        
+
         let modified = apply_rewrites_in_tree(root, false, &["_pb2.py".into()], None).unwrap();
         assert_eq!(modified, 1);
-        
+
         let billing = fs::read_to_string(root.join("billing/billing_pb2.py")).unwrap();
         // Should be sibling import: from ..order import order_pb2 (up one level, then down)
-        assert_eq!(billing, "from ..order import order_pb2 as order_dot_order__pb2\n");
+        assert_eq!(
+            billing,
+            "from ..order import order_pb2 as order_dot_order__pb2\n"
+        );
     }
 }

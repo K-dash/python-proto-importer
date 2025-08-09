@@ -175,7 +175,6 @@ def verify_src_structure(gen_path: Path, has_init: bool = True):
         "out": "src/proto_importer_e2e/generated",
         "has_init": True,
         "verify_func": "src",
-        "no_verify": True,  # Skip verification due to import dry-run issues with proto dependencies
     }),
 ])
 def test_extended_configs(config_name, expected):

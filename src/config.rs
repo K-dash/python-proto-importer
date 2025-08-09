@@ -189,3 +189,256 @@ impl AppConfig {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use tempfile::tempdir;
+
+    #[test]
+    fn load_minimal_config() {
+        let dir = tempdir().unwrap();
+        let config_path = dir.path().join("pyproject.toml");
+        fs::write(
+            &config_path,
+            r#"
+[tool.python_proto_importer]
+inputs = ["proto/**/*.proto"]
+"#,
+        )
+        .unwrap();
+
+        let config = AppConfig::load(Some(&config_path)).unwrap();
+
+        assert!(matches!(config.backend, Backend::Protoc));
+        assert_eq!(config.python_exe, "python3");
+        assert_eq!(config.include, vec![PathBuf::from(".")]);
+        assert_eq!(config.inputs, vec!["proto/**/*.proto"]);
+        assert_eq!(config.out, PathBuf::from("generated/python"));
+        assert!(!config.generate_mypy);
+        assert!(!config.generate_mypy_grpc);
+        assert!(config.postprocess.protoletariat);
+        assert!(config.postprocess.fix_pyi);
+        assert!(config.postprocess.create_package);
+        assert!(config.postprocess.exclude_google);
+        assert!(!config.postprocess.pyright_header);
+        assert_eq!(
+            config.postprocess.module_suffixes,
+            vec!["_pb2.py", "_pb2.pyi", "_pb2_grpc.py", "_pb2_grpc.pyi"]
+        );
+        assert!(config.verify.is_none());
+    }
+
+    #[test]
+    fn load_full_config() {
+        let dir = tempdir().unwrap();
+        let config_path = dir.path().join("pyproject.toml");
+        fs::write(
+            &config_path,
+            r#"
+[tool.python_proto_importer]
+backend = "buf"
+python_exe = "uv"
+include = ["proto", "common"]
+inputs = ["proto/**/*.proto", "common/**/*.proto"]
+out = "src/generated"
+mypy = true
+mypy_grpc = true
+
+[tool.python_proto_importer.postprocess]
+protoletariat = false
+fix_pyi = false
+create_package = false
+exclude_google = false
+pyright_header = true
+module_suffixes = ["_pb2.py", "_grpc.py"]
+
+[tool.python_proto_importer.verify]
+mypy_cmd = ["mypy", "--strict"]
+pyright_cmd = ["pyright", "generated"]
+"#,
+        )
+        .unwrap();
+
+        let config = AppConfig::load(Some(&config_path)).unwrap();
+
+        assert!(matches!(config.backend, Backend::Buf));
+        assert_eq!(config.python_exe, "uv");
+        assert_eq!(
+            config.include,
+            vec![PathBuf::from("proto"), PathBuf::from("common")]
+        );
+        assert_eq!(config.inputs, vec!["proto/**/*.proto", "common/**/*.proto"]);
+        assert_eq!(config.out, PathBuf::from("src/generated"));
+        assert!(config.generate_mypy);
+        assert!(config.generate_mypy_grpc);
+        assert!(!config.postprocess.protoletariat);
+        assert!(!config.postprocess.fix_pyi);
+        assert!(!config.postprocess.create_package);
+        assert!(!config.postprocess.exclude_google);
+        assert!(config.postprocess.pyright_header);
+        assert_eq!(
+            config.postprocess.module_suffixes,
+            vec!["_pb2.py", "_grpc.py"]
+        );
+
+        let verify = config.verify.unwrap();
+        assert_eq!(verify.mypy_cmd.unwrap(), vec!["mypy", "--strict"]);
+        assert_eq!(verify.pyright_cmd.unwrap(), vec!["pyright", "generated"]);
+    }
+
+    #[test]
+    fn load_empty_include_defaults_to_current_dir() {
+        let dir = tempdir().unwrap();
+        let config_path = dir.path().join("pyproject.toml");
+        fs::write(
+            &config_path,
+            r#"
+[tool.python_proto_importer]
+inputs = ["proto/**/*.proto"]
+include = []
+"#,
+        )
+        .unwrap();
+
+        let config = AppConfig::load(Some(&config_path)).unwrap();
+        assert_eq!(config.include, vec![PathBuf::from(".")]);
+    }
+
+    #[test]
+    fn backend_case_insensitive() {
+        let dir = tempdir().unwrap();
+        let config_path = dir.path().join("pyproject.toml");
+        fs::write(
+            &config_path,
+            r#"
+[tool.python_proto_importer]
+backend = "PROTOC"
+inputs = ["proto/**/*.proto"]
+"#,
+        )
+        .unwrap();
+
+        let config = AppConfig::load(Some(&config_path)).unwrap();
+        assert!(matches!(config.backend, Backend::Protoc));
+    }
+
+    #[test]
+    fn unsupported_backend_fails() {
+        let dir = tempdir().unwrap();
+        let config_path = dir.path().join("pyproject.toml");
+        fs::write(
+            &config_path,
+            r#"
+[tool.python_proto_importer]
+backend = "unsupported"
+inputs = ["proto/**/*.proto"]
+"#,
+        )
+        .unwrap();
+
+        let result = AppConfig::load(Some(&config_path));
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("unsupported backend")
+        );
+    }
+
+    #[test]
+    fn missing_config_section_fails() {
+        let dir = tempdir().unwrap();
+        let config_path = dir.path().join("pyproject.toml");
+        fs::write(
+            &config_path,
+            r#"
+[tool.other_tool]
+something = "value"
+"#,
+        )
+        .unwrap();
+
+        let result = AppConfig::load(Some(&config_path));
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("[tool.python_proto_importer] not found")
+        );
+    }
+
+    #[test]
+    fn missing_file_fails() {
+        let result = AppConfig::load(Some(&PathBuf::from("nonexistent.toml")));
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("failed to read"));
+    }
+
+    #[test]
+    fn invalid_toml_fails() {
+        let dir = tempdir().unwrap();
+        let config_path = dir.path().join("pyproject.toml");
+        fs::write(
+            &config_path,
+            r#"
+[tool.python_proto_importer
+# Missing closing bracket
+inputs = ["proto/**/*.proto"]
+"#,
+        )
+        .unwrap();
+
+        let result = AppConfig::load(Some(&config_path));
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("failed to parse"));
+    }
+
+    #[test]
+    fn load_default_path() {
+        let dir = tempdir().unwrap();
+        let original_dir = std::env::current_dir().unwrap();
+        std::env::set_current_dir(&dir).unwrap();
+
+        let config_path = dir.path().join("pyproject.toml");
+        fs::write(
+            &config_path,
+            r#"
+[tool.python_proto_importer]
+inputs = ["proto/**/*.proto"]
+"#,
+        )
+        .unwrap();
+
+        let config = AppConfig::load(None).unwrap();
+        assert_eq!(config.inputs, vec!["proto/**/*.proto"]);
+
+        std::env::set_current_dir(&original_dir).unwrap();
+    }
+
+    #[test]
+    fn verify_section_optional() {
+        let dir = tempdir().unwrap();
+        let config_path = dir.path().join("pyproject.toml");
+        fs::write(
+            &config_path,
+            r#"
+[tool.python_proto_importer]
+inputs = ["proto/**/*.proto"]
+
+[tool.python_proto_importer.verify]
+mypy_cmd = ["mypy"]
+# pyright_cmd intentionally omitted
+"#,
+        )
+        .unwrap();
+
+        let config = AppConfig::load(Some(&config_path)).unwrap();
+        let verify = config.verify.unwrap();
+        assert_eq!(verify.mypy_cmd.unwrap(), vec!["mypy"]);
+        assert!(verify.pyright_cmd.is_none());
+    }
+}
