@@ -102,20 +102,32 @@ mod commands {
         let cfg = AppConfig::load(pyproject.map(Path::new)).context("failed to load config")?;
         tracing::info!(?cfg.backend, out=%cfg.out.display(), "build start");
 
-        let allowed_basenames = match cfg.backend {
-            Backend::Protoc => {
-                let runner = ProtocRunner::new(&cfg);
-                let fds_bytes = runner.generate()?;
-                let _pool = load_fds_from_bytes(&fds_bytes).context("decode FDS failed")?;
-                Some(
-                    collect_generated_basenames_from_bytes(&fds_bytes)
-                        .context("collect basenames from FDS failed")?,
-                )
+        // Support postprocess-only mode: skip generation, only run postprocess/verify
+        let allowed_basenames = if _postprocess_only {
+            if !cfg.out.exists() {
+                anyhow::bail!(
+                    "--postprocess-only: output directory does not exist: {}",
+                    cfg.out.display()
+                );
             }
-            Backend::Buf => {
-                // To be implemented in v0.2 (FDS collection not supported)
-                tracing::warn!("buf backend is not implemented yet");
-                None
+            tracing::info!("postprocess-only mode: skip generation");
+            None
+        } else {
+            match cfg.backend {
+                Backend::Protoc => {
+                    let runner = ProtocRunner::new(&cfg);
+                    let fds_bytes = runner.generate()?;
+                    let _pool = load_fds_from_bytes(&fds_bytes).context("decode FDS failed")?;
+                    Some(
+                        collect_generated_basenames_from_bytes(&fds_bytes)
+                            .context("collect basenames from FDS failed")?,
+                    )
+                }
+                Backend::Buf => {
+                    // To be implemented in v0.2 (FDS collection not supported)
+                    tracing::warn!("buf backend is not implemented yet");
+                    None
+                }
             }
         };
 
@@ -696,33 +708,50 @@ mod doctor {
             );
         }
 
-        // Check grpc_tools.protoc availability
-        let py = check("uv").unwrap_or_else(|| check("python3").unwrap_or_default());
-        if py.is_empty() {
-            println!("grpc_tools.protoc : skip (python not found)");
+        // Check grpc_tools.protoc availability (primary requirement for v0.1)
+        let py_runner = check("uv")
+            .or_else(|| check("python3"))
+            .or_else(|| check("python"))
+            .unwrap_or_default();
+
+        let mut grpc_tools_found = false;
+        if py_runner.is_empty() {
+            println!("grpc_tools      : skip (python not found)");
         } else {
-            let out = std::process::Command::new(&py)
-                .args([
-                    "-c",
-                    "import pkgutil;print(1 if pkgutil.find_loader('grpc_tools') else 0)",
-                ])
+            let mut cmd = std::process::Command::new(&py_runner);
+            // Handle uv-specific invocation
+            if py_runner.ends_with("uv") || py_runner == "uv" {
+                cmd.arg("run").arg("python").arg("-c");
+            } else {
+                cmd.arg("-c");
+            }
+            cmd.arg("import pkgutil;print(1 if pkgutil.find_loader('grpc_tools') else 0)");
+            let out = cmd
                 .output()
-                .context("failed to run python")?;
-            let ok = String::from_utf8_lossy(&out.stdout).trim() == "1";
+                .context("failed to run python to probe grpc_tools")?;
+            grpc_tools_found = String::from_utf8_lossy(&out.stdout).trim() == "1";
             println!(
                 "grpc_tools      : {}",
-                if ok { "found" } else { "not found" }
+                if grpc_tools_found {
+                    "found"
+                } else {
+                    "not found"
+                }
             );
         }
 
-        // Return non-zero if none exist
-        let any_found = [check("protoc"), check("buf")]
-            .into_iter()
-            .flatten()
-            .next()
-            .is_some();
-        if !any_found {
-            bail!("neither protoc nor buf found in PATH");
+        // protoc/buf are optional in v0.1 (informational only)
+        let protoc_found = check("protoc").is_some();
+        let buf_found = check("buf").is_some();
+        if !protoc_found && !buf_found {
+            println!("warning        : protoc/buf not found (optional for v0.1)");
+        }
+
+        // Fail if grpc_tools is not available
+        if !grpc_tools_found {
+            bail!(
+                "grpc_tools.protoc not found. Install with 'uv add grpcio-tools' or 'pip install grpcio-tools'"
+            );
         }
 
         Ok(())
