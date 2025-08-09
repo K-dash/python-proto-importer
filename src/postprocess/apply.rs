@@ -89,11 +89,8 @@ fn rewrite_lines_in_content(
             if let Some((ups, remainder)) =
                 compute_relative_import_prefix(file_dir, target.parent().unwrap_or(root))
             {
-                let dots = if ups == 0 {
-                    ".".to_string()
-                } else {
-                    ".".repeat(ups)
-                };
+                // ups=0 -> "." (current), ups=1 -> ".." (parent)
+                let dots = ".".repeat(ups + 1);
                 let from_pkg = if remainder.is_empty() {
                     dots
                 } else {
@@ -130,11 +127,8 @@ fn rewrite_lines_in_content(
             if let Some((ups, remainder)) =
                 compute_relative_import_prefix(file_dir, target.parent().unwrap_or(root))
             {
-                let dots = if ups == 0 {
-                    ".".to_string()
-                } else {
-                    ".".repeat(ups)
-                };
+                // ups=0 -> "." (current), ups=1 -> ".." (parent)
+                let dots = ".".repeat(ups + 1);
                 let from_pkg = if remainder.is_empty() {
                     dots
                 } else {
@@ -240,4 +234,78 @@ pub fn apply_rewrites_in_tree(
         }
     }
     Ok(modified)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use tempfile::tempdir;
+
+    #[test]
+    fn compute_prefix_basic() {
+        let _root = Path::new("/");
+        let from = Path::new("/a/b");
+        let to = Path::new("/a/c/d");
+        let (ups, rem) = compute_relative_import_prefix(from, to).unwrap();
+        assert_eq!(ups, 1);
+        assert_eq!(rem, "c.d");
+    }
+
+    #[test]
+    fn rewrite_import_alias() {
+        let dir = tempdir().unwrap();
+        let root = dir.path();
+        // target module at root/a_pb2.py
+        fs::write(root.join("a_pb2.py"), "# stub").unwrap();
+        // file under sub/needs.py
+        let sub = root.join("sub");
+        fs::create_dir_all(&sub).unwrap();
+        let content = "import a_pb2 as a__pb2\n";
+        let (out, changed) = rewrite_lines_in_content(content, &sub, root, false).unwrap();
+        assert!(changed);
+        assert_eq!(out, "from .. import a_pb2 as a__pb2\n");
+    }
+
+    #[test]
+    fn rewrite_pyi_simple_import() {
+        let dir = tempdir().unwrap();
+        let root = dir.path();
+        fs::write(root.join("a_pb2.py"), "# stub").unwrap();
+        let sub = root.join("pkg");
+        fs::create_dir_all(&sub).unwrap();
+        let content = "import a_pb2\n";
+        let (out, changed) = rewrite_lines_in_content(content, &sub, root, false).unwrap();
+        assert!(changed);
+        assert_eq!(out, "from .. import a_pb2\n");
+    }
+
+    #[test]
+    fn skip_google_protobuf() {
+        let dir = tempdir().unwrap();
+        let root = dir.path();
+        // no need to create files; should skip due to exclude_google
+        let content = "import google.protobuf.timestamp_pb2 as timestamp__pb2\n";
+        let (out, changed) = rewrite_lines_in_content(content, root, root, true).unwrap();
+        assert!(!changed);
+        assert_eq!(out, content);
+    }
+
+    #[test]
+    fn apply_rewrites_suffix_filter() {
+        let dir = tempdir().unwrap();
+        let root = dir.path();
+        // create structure
+        fs::create_dir_all(root.join("x")).unwrap();
+        fs::write(root.join("a_pb2.py"), "# a\n").unwrap();
+        fs::write(root.join("x/b_pb2.py"), "import a_pb2 as a__pb2\n").unwrap();
+        fs::write(root.join("c.py"), "import a_pb2 as a__pb2\n").unwrap();
+        let modified = apply_rewrites_in_tree(root, false, &["_pb2.py".into()]).unwrap();
+        // only x/b_pb2.py should be modified
+        assert_eq!(modified, 1);
+        let b = fs::read_to_string(root.join("x/b_pb2.py")).unwrap();
+        assert_eq!(b, "from .. import a_pb2 as a__pb2\n");
+        let c = fs::read_to_string(root.join("c.py")).unwrap();
+        assert_eq!(c, "import a_pb2 as a__pb2\n");
+    }
 }
