@@ -54,7 +54,13 @@ proto-importer build
 
 ### `proto-importer doctor`
 
-必要なツール（protoc、buf、grpc_tools、mypy、pyright）の環境チェック。
+バージョン付きの環境診断とヒント表示：
+
+- Python 実行環境（uv/python）の検出とバージョン表示
+- `grpcio-tools`（必須）の存在とバージョン確認
+- `mypy-protobuf` / `mypy-grpc`（設定に応じて任意）の存在確認
+- `protoc` / `buf` のバージョン（v0.1 では参考情報）
+- `mypy` / `pyright` CLI の有無と、pyproject の設定に基づく導入ヒント
 
 ### `proto-importer build [--pyproject PATH]`
 

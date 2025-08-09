@@ -33,9 +33,8 @@ fn split_module_qualname(qualified: &str) -> (String, String) {
 
 fn compute_relative_import_prefix(from_dir: &Path, to_dir: &Path) -> Option<(usize, String)> {
     // Try canonicalize to normalize symlinks and relative segments; fall back to raw paths
-    let canonicalize_or = |p: &Path| -> PathBuf {
-        std::fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf())
-    };
+    let canonicalize_or =
+        |p: &Path| -> PathBuf { std::fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf()) };
     let from_c = canonicalize_or(from_dir);
     let to_c = canonicalize_or(to_dir);
 
