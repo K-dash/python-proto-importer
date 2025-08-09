@@ -125,13 +125,18 @@ impl AppConfig {
             .core
             .python_exe
             .unwrap_or_else(|| "python3".to_string());
-        let include = importer
+        let mut include = importer
             .core
             .include
             .unwrap_or_default()
             .into_iter()
             .map(PathBuf::from)
             .collect::<Vec<_>>();
+
+        // If include is empty, use current directory as default
+        if include.is_empty() {
+            include.push(PathBuf::from("."));
+        }
         let inputs = importer.core.inputs.unwrap_or_default();
         let out = importer
             .core

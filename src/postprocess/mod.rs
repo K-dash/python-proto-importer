@@ -23,7 +23,10 @@ pub fn add_pyright_header(root: &Path) -> Result<usize> {
             if content.starts_with(header) {
                 continue;
             }
-            let mut f = fs::OpenOptions::new().write(true).truncate(true).open(p)
+            let mut f = fs::OpenOptions::new()
+                .write(true)
+                .truncate(true)
+                .open(p)
                 .with_context(|| format!("open {} for write", p.display()))?;
             f.write_all(header.as_bytes())?;
             f.write_all(content.as_bytes())?;

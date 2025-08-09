@@ -182,10 +182,12 @@ fn rewrite_lines_in_content(
             if let Some((ups, remainder)) =
                 compute_relative_import_prefix(file_dir, target.parent().unwrap_or(root))
             {
+                // ups=0 -> same level (use "." + remainder)
+                // ups=1 -> parent level (use ".." + remainder) 
                 let dots = if ups == 0 {
                     ".".to_string()
                 } else {
-                    ".".repeat(ups)
+                    ".".repeat(ups + 1)
                 };
                 let from_pkg = if remainder.is_empty() {
                     dots
@@ -301,6 +303,16 @@ mod tests {
     }
 
     #[test]
+    fn compute_prefix_same_level() {
+        // Test sibling directories: billing/ and order/ under generated/
+        let from = Path::new("generated/billing");
+        let to = Path::new("generated/order");
+        let (ups, rem) = compute_relative_import_prefix(from, to).unwrap();
+        assert_eq!(ups, 1); // Go up one level to parent, then down to sibling
+        assert_eq!(rem, "order");
+    }
+
+    #[test]
     fn rewrite_import_alias() {
         let dir = tempdir().unwrap();
         let root = dir.path();
@@ -355,5 +367,27 @@ mod tests {
         assert_eq!(b, "from .. import a_pb2 as a__pb2\n");
         let c = fs::read_to_string(root.join("c.py")).unwrap();
         assert_eq!(c, "import a_pb2 as a__pb2\n");
+    }
+
+    #[test]
+    fn rewrite_from_sibling_directory() {
+        // Test the actual scenario: billing/ importing from order/
+        let dir = tempdir().unwrap();
+        let root = dir.path();
+        
+        // Create structure: generated/billing/ and generated/order/
+        fs::create_dir_all(root.join("billing")).unwrap();
+        fs::create_dir_all(root.join("order")).unwrap();
+        fs::write(root.join("order/order_pb2.py"), "# order module\n").unwrap();
+        
+        let billing_content = "from order import order_pb2 as order_dot_order__pb2\n";
+        fs::write(root.join("billing/billing_pb2.py"), billing_content).unwrap();
+        
+        let modified = apply_rewrites_in_tree(root, false, &["_pb2.py".into()], None).unwrap();
+        assert_eq!(modified, 1);
+        
+        let billing = fs::read_to_string(root.join("billing/billing_pb2.py")).unwrap();
+        // Should be sibling import: from ..order import order_pb2 (up one level, then down)
+        assert_eq!(billing, "from ..order import order_pb2 as order_dot_order__pb2\n");
     }
 }

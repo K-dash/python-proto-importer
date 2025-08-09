@@ -75,17 +75,33 @@ impl<'a> ProtocRunner<'a> {
             cmd.arg(a);
         }
         // Expand globs in inputs (v0.1: perform expansion here)
+        // Filter files to only include those under specified include paths
         for pattern in inputs {
             let mut matched_any = false;
             if let Ok(paths) = glob(pattern) {
                 for entry in paths.flatten() {
-                    cmd.arg(entry);
-                    matched_any = true;
+                    // Check if the file is under any of the include paths
+                    let should_include = self.cfg.include.iter().any(|inc_path| {
+                        // Normalize paths for comparison
+                        if let Ok(entry_canonical) = entry.canonicalize() {
+                            if let Ok(inc_canonical) = inc_path.canonicalize() {
+                                return entry_canonical.starts_with(&inc_canonical);
+                            }
+                        }
+                        // Fallback to string-based comparison
+                        entry.starts_with(inc_path)
+                    });
+
+                    if should_include {
+                        cmd.arg(entry);
+                        matched_any = true;
+                    }
                 }
             }
             if !matched_any {
-                // Fallback: pass through as-is
-                cmd.arg(pattern);
+                // If no files matched after filtering, don't pass anything
+                // This prevents protoc errors for files outside include paths
+                tracing::debug!("Pattern {} matched no files within include paths", pattern);
             }
         }
 

@@ -89,9 +89,9 @@ fn main() -> Result<()> {
 mod commands {
     use super::config::{AppConfig, Backend};
     use super::generator::protoc::ProtocRunner;
+    use super::postprocess::add_pyright_header;
     use super::postprocess::apply::apply_rewrites_in_tree;
     use super::postprocess::create_packages;
-    use super::postprocess::add_pyright_header;
     use super::postprocess::fds::{collect_generated_basenames_from_bytes, load_fds_from_bytes};
     use super::postprocess::rel_imports::scan_and_report;
     use anyhow::{Context, Result, bail};
