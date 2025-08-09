@@ -198,6 +198,7 @@ pub fn apply_rewrites_in_tree(
     root: &Path,
     exclude_google: bool,
     module_suffixes: &[String],
+    allowed_basenames: Option<&std::collections::HashSet<String>>,
 ) -> Result<usize> {
     let mut modified = 0usize;
     for entry in WalkDir::new(root).into_iter().filter_map(Result::ok) {
@@ -215,6 +216,13 @@ pub fn apply_rewrites_in_tree(
                 continue;
             }
             let content = fs::read_to_string(p).with_context(|| format!("read {}", p.display()))?;
+            // 事前フィルタ: allowed_basenames（FDS由来）が与えられていれば、
+            // 行単位で対象basenameが含まれないファイルはスキップ
+            if let Some(allowed) = allowed_basenames {
+                if !allowed.iter().any(|b| content.contains(b)) {
+                    continue;
+                }
+            }
             let (new_content, changed) = rewrite_lines_in_content(
                 &content,
                 p.parent().unwrap_or(root),
@@ -300,7 +308,7 @@ mod tests {
         fs::write(root.join("a_pb2.py"), "# a\n").unwrap();
         fs::write(root.join("x/b_pb2.py"), "import a_pb2 as a__pb2\n").unwrap();
         fs::write(root.join("c.py"), "import a_pb2 as a__pb2\n").unwrap();
-        let modified = apply_rewrites_in_tree(root, false, &["_pb2.py".into()]).unwrap();
+        let modified = apply_rewrites_in_tree(root, false, &["_pb2.py".into()], None).unwrap();
         // only x/b_pb2.py should be modified
         assert_eq!(modified, 1);
         let b = fs::read_to_string(root.join("x/b_pb2.py")).unwrap();

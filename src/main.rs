@@ -91,7 +91,7 @@ mod commands {
     use super::generator::protoc::ProtocRunner;
     use super::postprocess::apply::apply_rewrites_in_tree;
     use super::postprocess::create_packages;
-    use super::postprocess::fds::load_fds_from_bytes;
+    use super::postprocess::fds::{collect_generated_basenames_from_bytes, load_fds_from_bytes};
     use super::postprocess::rel_imports::scan_and_report;
     use anyhow::{Context, Result, bail};
     use std::fs;
@@ -101,18 +101,22 @@ mod commands {
         let cfg = AppConfig::load(pyproject.map(Path::new)).context("failed to load config")?;
         tracing::info!(?cfg.backend, out=%cfg.out.display(), "build start");
 
-        match cfg.backend {
+        let allowed_basenames = match cfg.backend {
             Backend::Protoc => {
                 let runner = ProtocRunner::new(&cfg);
                 let fds_bytes = runner.generate()?;
-                // decode now (pool not yet used further in v0.1)
                 let _pool = load_fds_from_bytes(&fds_bytes).context("decode FDS failed")?;
+                Some(
+                    collect_generated_basenames_from_bytes(&fds_bytes)
+                        .context("collect basenames from FDS failed")?,
+                )
             }
             Backend::Buf => {
-                // v0.2 で実装
+                // v0.2 で実装（FDS収集未対応）
                 tracing::warn!("buf backend is not implemented yet");
+                None
             }
-        }
+        };
 
         // __init__.py 生成（オプトイン/デフォルトON）
         if cfg.postprocess.create_package {
@@ -135,6 +139,7 @@ mod commands {
                 &cfg.out,
                 cfg.postprocess.exclude_google,
                 &cfg.postprocess.module_suffixes,
+                allowed_basenames.as_ref(),
             )
             .context("apply relative-import rewrites failed")?;
             tracing::info!(
