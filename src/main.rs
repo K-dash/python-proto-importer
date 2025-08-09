@@ -6,6 +6,7 @@ mod config;
 mod generator {
     pub mod protoc;
 }
+mod postprocess;
 
 #[derive(Parser, Debug)]
 #[command(name = "proto-importer", version, about = "Python proto importer toolkit")] 
@@ -82,6 +83,7 @@ fn main() -> Result<()> {
 mod commands {
     use super::config::{AppConfig, Backend};
     use super::generator::protoc::ProtocRunner;
+    use super::postprocess::create_packages;
     use anyhow::{bail, Context, Result};
     use std::fs;
     use std::path::Path;
@@ -99,6 +101,12 @@ mod commands {
                 // v0.2 で実装
                 tracing::warn!("buf backend is not implemented yet");
             }
+        }
+
+        // __init__.py 生成（オプトイン/デフォルトON）
+        if cfg.postprocess.create_package {
+            let created = create_packages(&cfg.out)?;
+            tracing::info!("created __init__.py: {}", created);
         }
 
         if !no_verify {
