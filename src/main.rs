@@ -9,7 +9,11 @@ mod generator {
 mod postprocess;
 
 #[derive(Parser, Debug)]
-#[command(name = "proto-importer", version, about = "Python proto importer toolkit")] 
+#[command(
+    name = "proto-importer",
+    version,
+    about = "Python proto importer toolkit"
+)]
 struct Cli {
     /// Increase verbosity (-v, -vv). Uses RUST_LOG under the hood
     #[arg(short = 'v', action = clap::ArgAction::Count)]
@@ -56,7 +60,7 @@ fn init_tracing(verbosity: u8) {
         1 => "debug",
         _ => "trace",
     };
-    let env_filter = std::env::var("RUST_LOG").unwrap_or_else(|_| format!("{level}"));
+    let env_filter = std::env::var("RUST_LOG").unwrap_or_else(|_| level.to_string());
     tracing_subscriber::fmt()
         .with_env_filter(EnvFilter::new(env_filter))
         .with_target(false)
@@ -70,9 +74,11 @@ fn main() -> Result<()> {
 
     match cli.command {
         Commands::Doctor => doctor::run()?,
-        Commands::Build { pyproject, no_verify, postprocess_only } => {
-            commands::build(pyproject.as_deref(), no_verify, postprocess_only)?
-        }
+        Commands::Build {
+            pyproject,
+            no_verify,
+            postprocess_only,
+        } => commands::build(pyproject.as_deref(), no_verify, postprocess_only)?,
         Commands::Check { pyproject } => commands::check(pyproject.as_deref())?,
         Commands::Clean { pyproject, yes } => commands::clean(pyproject.as_deref(), yes)?,
     }
@@ -84,7 +90,7 @@ mod commands {
     use super::config::{AppConfig, Backend};
     use super::generator::protoc::ProtocRunner;
     use super::postprocess::create_packages;
-    use anyhow::{bail, Context, Result};
+    use anyhow::{Context, Result, bail};
     use std::fs;
     use std::path::Path;
 
@@ -128,7 +134,8 @@ mod commands {
                 bail!("refusing to remove {} without --yes", out.display());
             }
             tracing::info!("removing {}", out.display());
-            fs::remove_dir_all(out).with_context(|| format!("failed to remove {}", out.display()))?;
+            fs::remove_dir_all(out)
+                .with_context(|| format!("failed to remove {}", out.display()))?;
         }
         Ok(())
     }
@@ -140,26 +147,30 @@ mod commands {
 }
 
 mod doctor {
-    use anyhow::{bail, Context, Result};
+    use anyhow::{Context, Result, bail};
     use which::which;
 
     fn check(cmd: &str) -> Option<String> {
-        which(cmd).ok().and_then(|p| p.to_str().map(|s| s.to_string()))
+        which(cmd)
+            .ok()
+            .and_then(|p| p.to_str().map(|s| s.to_string()))
     }
 
     pub fn run() -> Result<()> {
         let tools = [
-            "python3",
-            "uv",
-            "protoc",
-            "buf",
+            "python3", "uv", "protoc", "buf",
             // grpc_tools.protoc は Python モジュールとして検出
-            "mypy",
-            "pyright",
+            "mypy", "pyright",
         ];
 
         println!("== Tool presence ==");
-        for t in tools { println!("{:<10} : {}", t, check(t).unwrap_or_else(|| "not found".into())); }
+        for t in tools {
+            println!(
+                "{:<10} : {}",
+                t,
+                check(t).unwrap_or_else(|| "not found".into())
+            );
+        }
 
         // grpc_tools.protoc の確認
         let py = check("uv").unwrap_or_else(|| check("python3").unwrap_or_default());
@@ -167,19 +178,28 @@ mod doctor {
             println!("grpc_tools.protoc : skip (python not found)");
         } else {
             let out = std::process::Command::new(&py)
-                .args(["-c", "import pkgutil;print(1 if pkgutil.find_loader('grpc_tools') else 0)"])
+                .args([
+                    "-c",
+                    "import pkgutil;print(1 if pkgutil.find_loader('grpc_tools') else 0)",
+                ])
                 .output()
                 .context("failed to run python")?;
             let ok = String::from_utf8_lossy(&out.stdout).trim() == "1";
-            println!("grpc_tools      : {}", if ok { "found" } else { "not found" });
+            println!(
+                "grpc_tools      : {}",
+                if ok { "found" } else { "not found" }
+            );
         }
 
         // いずれも存在しない場合は非0を返す
-        let any_found = [
-            check("protoc"),
-            check("buf"),
-        ].into_iter().flatten().next().is_some();
-        if !any_found { bail!("neither protoc nor buf found in PATH"); }
+        let any_found = [check("protoc"), check("buf")]
+            .into_iter()
+            .flatten()
+            .next()
+            .is_some();
+        if !any_found {
+            bail!("neither protoc nor buf found in PATH");
+        }
 
         Ok(())
     }

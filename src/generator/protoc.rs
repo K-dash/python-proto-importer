@@ -1,6 +1,5 @@
 use crate::config::AppConfig;
 use anyhow::{Context, Result};
-use std::path::Path;
 use std::process::Command;
 use tempfile::NamedTempFile;
 
@@ -9,11 +8,13 @@ pub struct ProtocRunner<'a> {
 }
 
 impl<'a> ProtocRunner<'a> {
-    pub fn new(cfg: &'a AppConfig) -> Self { Self { cfg } }
+    pub fn new(cfg: &'a AppConfig) -> Self {
+        Self { cfg }
+    }
 
     pub fn generate(&self) -> Result<()> {
         // 1) descriptor set を作成
-        let mut fds = NamedTempFile::new().context("create temp file for descriptor set")?;
+        let fds = NamedTempFile::new().context("create temp file for descriptor set")?;
         let fds_path = fds.path().to_path_buf();
 
         // include パス
@@ -41,8 +42,12 @@ impl<'a> ProtocRunner<'a> {
         cmd.arg(format!("--descriptor_set_out={}", fds_path.display()));
 
         // include と inputs
-        for a in &args { cmd.arg(a); }
-        for i in inputs { cmd.arg(i); }
+        for a in &args {
+            cmd.arg(a);
+        }
+        for i in inputs {
+            cmd.arg(i);
+        }
 
         tracing::info!("running grpc_tools.protoc");
         let status = cmd.status().context("failed to run grpc_tools.protoc")?;

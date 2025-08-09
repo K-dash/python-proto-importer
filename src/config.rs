@@ -1,4 +1,4 @@
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use serde::Deserialize;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -9,6 +9,7 @@ pub enum Backend {
     Buf,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct AppConfig {
     pub backend: Backend,
@@ -20,6 +21,7 @@ pub struct AppConfig {
     pub verify: Option<Verify>,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct PostProcess {
     pub protoletariat: bool,
@@ -29,6 +31,7 @@ pub struct PostProcess {
     pub module_suffixes: Vec<String>,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct Verify {
     pub mypy_cmd: Option<Vec<String>>,
@@ -54,6 +57,7 @@ struct ImporterRoot {
     verify: Option<VerifyToml>,
 }
 
+#[allow(dead_code)]
 #[derive(Deserialize)]
 struct ImporterCore {
     backend: Option<String>,
@@ -67,6 +71,7 @@ struct ImporterCore {
     postprocess: Option<PostProcessToml>,
 }
 
+#[allow(dead_code)]
 #[derive(Deserialize)]
 struct PostProcessToml {
     protoletariat: Option<bool>,
@@ -76,6 +81,7 @@ struct PostProcessToml {
     module_suffixes: Option<Vec<String>>,
 }
 
+#[allow(dead_code)]
 #[derive(Deserialize)]
 struct VerifyToml {
     mypy_cmd: Option<Vec<String>>,
@@ -91,16 +97,30 @@ impl AppConfig {
         let content = fs::read_to_string(&path)
             .with_context(|| format!("failed to read {}", path.display()))?;
         let root: PyProject = toml::from_str(&content).context("failed to parse pyproject.toml")?;
-        let Some(tool) = root.tool else { bail!("[tool.python_proto_importer] not found"); };
-        let Some(importer) = tool.python_proto_importer else { bail!("[tool.python_proto_importer] not found"); };
+        let Some(tool) = root.tool else {
+            bail!("[tool.python_proto_importer] not found");
+        };
+        let Some(importer) = tool.python_proto_importer else {
+            bail!("[tool.python_proto_importer] not found");
+        };
 
-        let backend = match importer.core.backend.as_deref().unwrap_or("protoc").to_lowercase().as_str() {
+        let backend = match importer
+            .core
+            .backend
+            .as_deref()
+            .unwrap_or("protoc")
+            .to_lowercase()
+            .as_str()
+        {
             "protoc" => Backend::Protoc,
             "buf" => Backend::Buf,
             other => bail!("unsupported backend: {}", other),
         };
 
-        let python_exe = importer.core.python_exe.unwrap_or_else(|| "python3".to_string());
+        let python_exe = importer
+            .core
+            .python_exe
+            .unwrap_or_else(|| "python3".to_string());
         let include = importer
             .core
             .include
@@ -127,12 +147,14 @@ impl AppConfig {
             fix_pyi: pp.fix_pyi.unwrap_or(true),
             create_package: pp.create_package.unwrap_or(true),
             exclude_google: pp.exclude_google.unwrap_or(true),
-            module_suffixes: pp.module_suffixes.unwrap_or_else(|| vec![
-                "_pb2.py".into(),
-                "_pb2.pyi".into(),
-                "_pb2_grpc.py".into(),
-                "_pb2_grpc.pyi".into(),
-            ]),
+            module_suffixes: pp.module_suffixes.unwrap_or_else(|| {
+                vec![
+                    "_pb2.py".into(),
+                    "_pb2.pyi".into(),
+                    "_pb2_grpc.py".into(),
+                    "_pb2_grpc.pyi".into(),
+                ]
+            }),
         };
 
         let verify = importer.verify.map(|v| Verify {
@@ -140,6 +162,14 @@ impl AppConfig {
             pyright_cmd: v.pyright_cmd,
         });
 
-        Ok(Self { backend, python_exe, include, inputs, out, postprocess, verify })
+        Ok(Self {
+            backend,
+            python_exe,
+            include,
+            inputs,
+            out,
+            postprocess,
+            verify,
+        })
     }
 }

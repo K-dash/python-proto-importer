@@ -1,0 +1,18 @@
+[config]
+default_to_workspace = false
+
+[tasks.format]
+command = "cargo"
+args = ["fmt", "--all"]
+
+[tasks.lint]
+command = "cargo"
+args = ["clippy", "--all-targets", "--all-features", "--", "-Dwarnings"]
+
+[tasks.build]
+command = "cargo"
+args = ["build", "--all-targets"]
+
+[tasks.test]
+command = "cargo"
+args = ["test", "--all"]
