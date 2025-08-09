@@ -120,9 +120,16 @@ impl<'a> ProtocRunner<'a> {
         }
 
         tracing::info!("running grpc_tools.protoc");
-        let status = cmd.status().context("failed to run grpc_tools.protoc")?;
-        if !status.success() {
-            anyhow::bail!("grpc_tools.protoc failed: status {}", status);
+        let output = cmd.output().context("failed to run grpc_tools.protoc")?;
+        if !output.status.success() {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            anyhow::bail!(
+                "grpc_tools.protoc failed: status {:?}\nstdout:\n{}\nstderr:\n{}",
+                output.status.code(),
+                stdout,
+                stderr
+            );
         }
 
         // Read and return FDS

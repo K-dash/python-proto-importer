@@ -134,7 +134,7 @@ inputs = ["api/definitions/**/*.proto"]
 | オプション         | 型      | デフォルト | 説明                                                                                                    |
 | ------------------ | ------- | ---------- | ------------------------------------------------------------------------------------------------------- |
 | `relative_imports` | boolean | `true`     | 生成されたファイル内の絶対 import を相対 import に変換。                                                |
-| `fix_pyi`          | boolean | `true`     | `.pyi`ファイル内の型アノテーションを修正（現在は将来の使用のために予約）。                              |
+| `fix_pyi`          | boolean | `true`     | `.pyi`ファイル内の型アノテーションを修正（v0.1では予約、現時点では効果なし）。                          |
 | `create_package`   | boolean | `true`     | すべてのディレクトリに`__init__.py`ファイルを作成。名前空間パッケージ（PEP 420）の場合は`false`に設定。 |
 | `exclude_google`   | boolean | `true`     | `google.protobuf`の import を相対 import 変換から除外。                                                 |
 | `pyright_header`   | boolean | `false`    | 生成された`_pb2.py`と`_pb2_grpc.py`ファイルに Pyright 抑制ヘッダーを追加。                              |
@@ -157,7 +157,7 @@ module_suffixes = ["_pb2.py", "_pb2.pyi", "_pb2_grpc.py", "_pb2_grpc.pyi"]
 
 **重要な注意事項：**
 
-1. **Import ドライラン**: 常に自動的に実行されます。ツールは生成されたすべての Python モジュールをインポートして有効性を確認します。
+1. **Import ドライラン**: 常に自動的に実行されます。ツールは生成された `.py` モジュール（`__init__.py` を除く）のみをインポートして有効性を確認します。`.pyi` ファイルは import されないため、型チェッカー（例：`pyright_cmd` を `**/*.pyi` に向ける）で検証してください。
 
 2. **型チェック**: 設定されている場合のみ実行されます。ツール（mypy/pyright）は環境内で利用可能である必要があります。
 
@@ -214,6 +214,23 @@ pyright_header = true
 [tool.python_proto_importer.verify]
 mypy_cmd = ["uv", "run", "mypy", "--strict", "--exclude", ".*_grpc\\.py$", "src/generated"]
 pyright_cmd = ["uv", "run", "pyright", "src/generated/**/*.pyi"]
+```
+
+注: pyright については、生成された `.py` は（実験的 API や動的属性参照の都合で）警告が出やすいため、上記のように `.pyi` スタブ中心での検証を推奨します。
+
+### `.pyi` のみを検証する設定例
+
+```toml
+[tool.python_proto_importer]
+backend = "protoc"
+include = ["proto"]
+inputs = ["proto/**/*.proto"]
+out = "generated/python"
+mypy = true
+
+[tool.python_proto_importer.verify]
+# 生成されたスタブのみを pyright で検証
+pyright_cmd = ["uv", "run", "pyright", "generated/python/**/*.pyi"]
 ```
 
 ### 名前空間パッケージ設定（PEP 420）
