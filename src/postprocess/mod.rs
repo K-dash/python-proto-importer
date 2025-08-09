@@ -4,6 +4,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
+pub mod rel_imports;
+
 pub fn create_packages(root: &Path) -> Result<usize> {
     let mut dirs: BTreeSet<PathBuf> = BTreeSet::new();
     for entry in WalkDir::new(root).into_iter().filter_map(Result::ok) {
