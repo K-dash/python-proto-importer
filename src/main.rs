@@ -215,8 +215,19 @@ mod commands {
                 if !py_suffixes.is_empty() && !py_suffixes.iter().any(|s| rel_str.ends_with(s)) {
                     continue;
                 }
-                let mod_name = rel_str.trim_end_matches(".py").replace('/', ".");
-                modules.push(mod_name);
+                // Build module name from path components to be OS-agnostic
+                // 1) remove extension
+                let rel_no_ext = rel.with_extension("");
+                // 2) join normal components with '.'
+                let mut parts: Vec<String> = Vec::new();
+                for comp in rel_no_ext.components() {
+                    if let std::path::Component::Normal(os) = comp {
+                        parts.push(os.to_string_lossy().to_string());
+                    }
+                }
+                if !parts.is_empty() {
+                    modules.push(parts.join("."));
+                }
             }
         }
 
@@ -240,14 +251,14 @@ mod commands {
 
             // Run single comprehensive test with detailed output capture
             let mut cmd = std::process::Command::new(&cfg.python_exe);
-            
+
             // Handle uv-specific command structure
             if cfg.python_exe == "uv" {
                 cmd.arg("run").arg("python").arg("-c").arg(&test_script);
             } else {
                 cmd.arg("-c").arg(&test_script);
             }
-            
+
             let output = cmd
                 .env("PYTHONPATH", &parent_path)
                 .output()
@@ -454,14 +465,14 @@ except Exception as e:
             );
 
             let mut cmd = std::process::Command::new(&cfg.python_exe);
-            
+
             // Handle uv-specific command structure
             if cfg.python_exe == "uv" {
                 cmd.arg("run").arg("python").arg("-c").arg(&test_script);
             } else {
                 cmd.arg("-c").arg(&test_script);
             }
-            
+
             let output = cmd
                 .env("PYTHONPATH", parent_path)
                 .output()

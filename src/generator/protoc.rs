@@ -39,7 +39,7 @@ impl<'a> ProtocRunner<'a> {
         // Use specified python_exe (uv/python3)
         let py = &self.cfg.python_exe;
         let mut cmd = Command::new(py);
-        
+
         // Handle uv-specific command structure
         if py == "uv" {
             cmd.arg("run").arg("-m").arg("grpc_tools.protoc");
@@ -143,7 +143,7 @@ impl<'a> ProtocRunner<'a> {
 
         let py = &self.cfg.python_exe;
         let mut cmd = Command::new(py);
-        
+
         // Handle uv-specific command structure
         if py == "uv" {
             cmd.arg("run").arg("-m").arg("grpc_tools.protoc");
