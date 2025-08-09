@@ -4,6 +4,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
+pub mod apply;
 pub mod fds;
 pub mod rel_imports;
 
