@@ -141,7 +141,95 @@ mod commands {
     }
 
     fn verify(cfg: &AppConfig) -> Result<()> {
-        tracing::info!("verify placeholder for {}", cfg.out.display());
+        use std::ffi::OsStr;
+        use walkdir::WalkDir;
+
+        // 1) import dry-run for generated python modules
+        let out_abs = cfg.out.canonicalize().unwrap_or_else(|_| cfg.out.clone());
+        let mut modules: Vec<String> = Vec::new();
+        let py_suffixes: Vec<&str> = cfg
+            .postprocess
+            .module_suffixes
+            .iter()
+            .filter_map(|s| {
+                if s.ends_with(".py") {
+                    Some(s.as_str())
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        for entry in WalkDir::new(&out_abs).into_iter().filter_map(Result::ok) {
+            let path = entry.path();
+            if path.is_file()
+                && path.extension() == Some(OsStr::new("py"))
+                && path.file_name() != Some(OsStr::new("__init__.py"))
+            {
+                let rel = path.strip_prefix(&out_abs).unwrap_or(path);
+                let rel_str = rel.to_string_lossy();
+                // must match known module suffixes (e.g. _pb2.py/_pb2_grpc.py)
+                if !py_suffixes.is_empty() && !py_suffixes.iter().any(|s| rel_str.ends_with(s)) {
+                    continue;
+                }
+                let mod_name = rel_str.trim_end_matches(".py").replace('/', ".");
+                modules.push(mod_name);
+            }
+        }
+
+        // Keep it deterministic
+        modules.sort();
+
+        // Try to import each module with PYTHONPATH=out_abs
+        let mut failed: Vec<(String, i32)> = Vec::new();
+        for m in modules.iter() {
+            let status = std::process::Command::new(&cfg.python_exe)
+                .arg("-c")
+                .arg(format!(
+                    "import sys,importlib; sys.path.insert(0, r'{path}'); importlib.import_module('{m}')",
+                    path = out_abs.display(),
+                    m = m
+                ))
+                .status()
+                .with_context(|| format!("failed running {} for import dry-run", cfg.python_exe))?;
+            if !status.success() {
+                failed.push((m.clone(), status.code().unwrap_or(-1)));
+            }
+        }
+        if !failed.is_empty() {
+            for (m, code) in &failed {
+                tracing::error!(module=%m, exit_code=%code, "import failed");
+            }
+            anyhow::bail!("import dry-run failed for {} modules", failed.len());
+        }
+        tracing::info!("import dry-run passed ({} modules)", modules.len());
+
+        // 2) optional type check commands
+        if let Some(v) = &cfg.verify {
+            if let Some(cmd) = &v.mypy_cmd {
+                if !cmd.is_empty() {
+                    run_cmd(cmd).context("mypy_cmd failed")?;
+                }
+            }
+            if let Some(cmd) = &v.pyright_cmd {
+                if !cmd.is_empty() {
+                    run_cmd(cmd).context("pyright_cmd failed")?;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn run_cmd(cmd: &[String]) -> Result<()> {
+        let mut it = cmd.iter();
+        let prog = it.next().ok_or_else(|| anyhow::anyhow!("empty command"))?;
+        let status = std::process::Command::new(prog)
+            .args(it)
+            .status()
+            .with_context(|| format!("failed to run {}", prog))?;
+        if !status.success() {
+            anyhow::bail!("command failed: {} (status {:?})", prog, status.code());
+        }
         Ok(())
     }
 }

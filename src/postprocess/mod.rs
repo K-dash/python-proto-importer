@@ -4,6 +4,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
+pub mod fds;
 pub mod rel_imports;
 
 pub fn create_packages(root: &Path) -> Result<usize> {
