@@ -106,6 +106,17 @@ def verify_pyright_header(gen_path: Path, has_header: bool):
         assert has_pyright == has_header
 
 
+def verify_relative_import_rewrite(gen_path: Path):
+    """Verify that absolute imports were rewritten to relative imports."""
+    target = gen_path / "proto" / "payment" / "payment_pb2.py"
+    assert target.exists(), f"{target} not found"
+    content = target.read_text(encoding="utf-8")
+    # should import sibling module relatively
+    assert "from . import types_pb2" in content
+    # absolute form should not remain
+    assert "import proto.payment.types_pb2" not in content
+
+
 @pytest.mark.parametrize("config_name,expected", [
     ("config_minimal", {
         "out": "generated/minimal",
@@ -167,6 +178,7 @@ def test_with_config(config_name, expected):
     verify_basic_structure(gen_path, expected["has_init"])
     verify_type_stubs(gen_path, expected["has_mypy"], expected["has_mypy_grpc"])
     verify_pyright_header(gen_path, expected["has_pyright_header"])
+    verify_relative_import_rewrite(gen_path)
 
 
 def test_build_and_verify():
@@ -209,3 +221,8 @@ def test_build_and_verify():
     # Root init files
     assert (gen / "proto" / "__init__.py").exists()
     assert (gen / "__init__.py").exists()
+
+    # relative import rewrite example: payment_pb2 should import types_pb2 relatively
+    payment_py = (gen / "proto" / "payment" / "payment_pb2.py").read_text(encoding="utf-8")
+    assert "from . import types_pb2" in payment_py
+    assert "import proto.payment.types_pb2" not in payment_py
