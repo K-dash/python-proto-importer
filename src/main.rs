@@ -91,6 +91,7 @@ mod commands {
     use super::generator::protoc::ProtocRunner;
     use super::postprocess::apply::apply_rewrites_in_tree;
     use super::postprocess::create_packages;
+    use super::postprocess::add_pyright_header;
     use super::postprocess::fds::{collect_generated_basenames_from_bytes, load_fds_from_bytes};
     use super::postprocess::rel_imports::scan_and_report;
     use anyhow::{Context, Result, bail};
@@ -133,7 +134,7 @@ mod commands {
             hits
         );
 
-        // 設定が有効なら最小の相対化を適用（.py のみ）
+        // 設定が有効なら最小の相対化を適用（.py/.pyi）
         if cfg.postprocess.protoletariat {
             let modified = apply_rewrites_in_tree(
                 &cfg.out,
@@ -146,6 +147,14 @@ mod commands {
                 "relative-import rewrites applied: {} files modified",
                 modified
             );
+        }
+
+        // Optional: add pyright header to generated .py files
+        if cfg.postprocess.pyright_header {
+            let added = add_pyright_header(&cfg.out)?;
+            if added > 0 {
+                tracing::info!("pyright header added: {} files", added);
+            }
         }
 
         if !no_verify {

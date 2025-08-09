@@ -1,5 +1,6 @@
 use crate::config::AppConfig;
 use anyhow::{Context, Result};
+use glob::glob;
 use std::fs;
 use std::process::Command;
 use tempfile::NamedTempFile;
@@ -18,6 +19,14 @@ impl<'a> ProtocRunner<'a> {
         let fds = NamedTempFile::new().context("create temp file for descriptor set")?;
         let fds_path = fds.path().to_path_buf();
 
+        // ensure output directory exists
+        if let Err(e) = std::fs::create_dir_all(&self.cfg.out) {
+            return Err(e).context(format!(
+                "failed to create output directory: {}",
+                self.cfg.out.display()
+            ));
+        }
+
         // include パス
         let mut args: Vec<String> = Vec::new();
         for inc in &self.cfg.include {
@@ -31,6 +40,19 @@ impl<'a> ProtocRunner<'a> {
         let py = &self.cfg.python_exe;
         let mut cmd = Command::new(py);
         cmd.arg("-m").arg("grpc_tools.protoc");
+        // Ensure protoc plugins installed in the same env are discoverable
+        if let Some(parent) = std::path::Path::new(py).parent() {
+            if let Some(parent_str) = parent.to_str() {
+                use std::env;
+                let mut buf = std::ffi::OsString::new();
+                buf.push(parent_str);
+                buf.push(if cfg!(windows) { ";" } else { ":" });
+                if let Some(existing) = env::var_os("PATH") {
+                    buf.push(existing);
+                }
+                cmd.env("PATH", buf);
+            }
+        }
 
         // 出力先
         cmd.arg(format!("--python_out={}", self.cfg.out.display()));
@@ -52,8 +74,19 @@ impl<'a> ProtocRunner<'a> {
         for a in &args {
             cmd.arg(a);
         }
-        for i in inputs {
-            cmd.arg(i);
+        // Expand globs in inputs (v0.1: perform expansion here)
+        for pattern in inputs {
+            let mut matched_any = false;
+            if let Ok(paths) = glob(pattern) {
+                for entry in paths.flatten() {
+                    cmd.arg(entry);
+                    matched_any = true;
+                }
+            }
+            if !matched_any {
+                // Fallback: pass through as-is
+                cmd.arg(pattern);
+            }
         }
 
         tracing::info!("running grpc_tools.protoc");

@@ -30,6 +30,7 @@ pub struct PostProcess {
     pub fix_pyi: bool,
     pub create_package: bool,
     pub exclude_google: bool,
+    pub pyright_header: bool,
     pub module_suffixes: Vec<String>,
 }
 
@@ -80,6 +81,7 @@ struct PostProcessToml {
     fix_pyi: Option<bool>,
     create_package: Option<bool>,
     exclude_google: Option<bool>,
+    pyright_header: Option<bool>,
     module_suffixes: Option<Vec<String>>,
 }
 
@@ -145,6 +147,7 @@ impl AppConfig {
             fix_pyi: Some(true),
             create_package: Some(true),
             exclude_google: Some(true),
+            pyright_header: Some(false),
             module_suffixes: None,
         });
         let postprocess = PostProcess {
@@ -152,6 +155,7 @@ impl AppConfig {
             fix_pyi: pp.fix_pyi.unwrap_or(true),
             create_package: pp.create_package.unwrap_or(true),
             exclude_google: pp.exclude_google.unwrap_or(true),
+            pyright_header: pp.pyright_header.unwrap_or(false),
             module_suffixes: pp.module_suffixes.unwrap_or_else(|| {
                 vec![
                     "_pb2.py".into(),

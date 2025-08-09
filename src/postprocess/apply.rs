@@ -20,6 +20,17 @@ fn path_from_module(root: &Path, module_path: &str, leaf: &str) -> PathBuf {
     p
 }
 
+fn split_module_qualname(qualified: &str) -> (String, String) {
+    if let Some(idx) = qualified.rfind('.') {
+        (
+            qualified[..idx].to_string(),
+            qualified[idx + 1..].to_string(),
+        )
+    } else {
+        (String::new(), qualified.to_string())
+    }
+}
+
 fn compute_relative_import_prefix(from_dir: &Path, to_dir: &Path) -> Option<(usize, String)> {
     let from = from_dir.components().collect::<Vec<_>>();
     let to = to_dir.components().collect::<Vec<_>>();
@@ -52,14 +63,16 @@ fn rewrite_lines_in_content(
 ) -> Result<(String, bool)> {
     let mut changed = false;
     let mut out = String::with_capacity(content.len());
+    // map of fully-qualified module -> local name to use in annotations
+    let mut module_rewrites: Vec<(String, String)> = Vec::new();
 
     let re_import = Regex::new(
-        r"^(?P<indent>\s*)import\s+(?P<mod>[A-Za-z0-9_\.]+)\s+as\s+(?P<alias>[A-Za-z0-9_]+)\s*$",
+        r"^(?P<indent>\s*)import\s+(?P<mod>[A-Za-z0-9_\.]+)\s+as\s+(?P<alias>[A-Za-z0-9_]+)\s*(?:#.*)?$",
     )
     .unwrap();
-    let re_from = Regex::new(r"^(?P<indent>\s*)from\s+(?P<pkg>[A-Za-z0-9_\.]+)\s+import\s+(?P<name>[A-Za-z0-9_]+)(?:\s+as\s+(?P<alias>[A-Za-z0-9_]+))?\s*$").unwrap();
+    let re_from = Regex::new(r"^(?P<indent>\s*)from\s+(?P<pkg>[A-Za-z0-9_\.]+)\s+import\s+(?P<name>[A-Za-z0-9_]+)(?:\s+as\s+(?P<alias>[A-Za-z0-9_]+))?\s*(?:#.*)?$").unwrap();
     let re_import_simple =
-        Regex::new(r"^(?P<indent>\s*)import\s+(?P<mod>[A-Za-z0-9_\.]+)\s*$").unwrap();
+        Regex::new(r"^(?P<indent>\s*)import\s+(?P<mod>[A-Za-z0-9_\.]+)\s*(?:#.*)?$").unwrap();
 
     for line in content.lines() {
         if line.trim_start().starts_with("from .") {
@@ -80,7 +93,8 @@ fn rewrite_lines_in_content(
                 out.push('\n');
                 continue;
             }
-            let target = path_from_module(root, "", module);
+            let (module_path, leaf) = split_module_qualname(module);
+            let target = path_from_module(root, &module_path, &leaf);
             if !target.exists() {
                 out.push_str(line);
                 out.push('\n');
@@ -96,10 +110,11 @@ fn rewrite_lines_in_content(
                 } else {
                     format!("{dots}{remainder}")
                 };
-                let new_line = format!("{indent}from {from_pkg} import {module}");
+                let new_line = format!("{indent}from {from_pkg} import {leaf}");
                 out.push_str(&new_line);
                 out.push('\n');
                 changed = true;
+                module_rewrites.push((module.to_string(), leaf.to_string()));
                 continue;
             }
         }
@@ -118,7 +133,8 @@ fn rewrite_lines_in_content(
                 out.push('\n');
                 continue;
             }
-            let target = path_from_module(root, "", module);
+            let (module_path, leaf) = split_module_qualname(module);
+            let target = path_from_module(root, &module_path, &leaf);
             if !target.exists() {
                 out.push_str(line);
                 out.push('\n');
@@ -134,10 +150,11 @@ fn rewrite_lines_in_content(
                 } else {
                     format!("{dots}{remainder}")
                 };
-                let new_line = format!("{indent}from {from_pkg} import {module} as {alias}");
+                let new_line = format!("{indent}from {from_pkg} import {leaf} as {alias}");
                 out.push_str(&new_line);
                 out.push('\n');
                 changed = true;
+                module_rewrites.push((module.to_string(), alias.to_string()));
                 continue;
             }
         }
@@ -183,11 +200,34 @@ fn rewrite_lines_in_content(
                 out.push_str(&new_line);
                 out.push('\n');
                 changed = true;
+                // fully-qualified = pkg.name
+                let fq = if pkg.is_empty() {
+                    name.to_string()
+                } else {
+                    format!("{pkg}.{name}")
+                };
+                let local = alias
+                    .map(|s| s.to_string())
+                    .unwrap_or_else(|| name.to_string());
+                module_rewrites.push((fq, local));
                 continue;
             }
         }
         out.push_str(line);
         out.push('\n');
+    }
+    // After rewriting imports, fix fully-qualified references in annotations
+    if !module_rewrites.is_empty() {
+        for (from_mod, to_name) in module_rewrites.iter() {
+            // replace occurrences like "from_mod.*" to "to_name.*"
+            let pattern = regex::Regex::new(&format!(r"\b{}\.", regex::escape(from_mod))).unwrap();
+            let replaced = pattern.replace_all(&out, format!("{}.", to_name));
+            let new_str = replaced.into_owned();
+            if new_str != out {
+                changed = true;
+                out = new_str;
+            }
+        }
     }
 
     Ok((out, changed))
