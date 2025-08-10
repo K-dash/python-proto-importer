@@ -1,0 +1,22 @@
+coverage:
+  status:
+    project:
+      default:
+        target: auto
+        threshold: 0%
+        if_not_found: success
+    patch:
+      default:
+        target: auto
+        threshold: 0%
+        if_not_found: success
+
+comment:
+  layout: "reach,diff,flags,files,footer"
+  behavior: default
+  require_changes: false
+  require_base: false
+  require_head: false
+
+github_checks:
+  annotations: false
