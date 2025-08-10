@@ -16,3 +16,6 @@ comment:
     require_base: false
     require_head: true
     after_n_builds: 1
+    
+github_checks:
+    annotations: false

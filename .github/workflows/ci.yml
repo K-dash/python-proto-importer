@@ -89,6 +89,8 @@ jobs:
           files: ./cobertura.xml
           fail_ci_if_error: true
           verbose: true
+          name: rust-coverage
+          flags: unittests
 
       - name: Archive code coverage results
         uses: actions/upload-artifact@v4
