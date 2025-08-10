@@ -17,6 +17,10 @@ jobs:
   check:
     name: Test & Lint
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      id-token: write
     env:
       CARGO_MAKE_VERSION: "0.37.24"
 
