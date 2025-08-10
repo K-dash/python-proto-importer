@@ -1,0 +1,62 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended", ":dependencyDashboard"],
+  "timezone": "Asia/Tokyo",
+  "schedule": [
+    "after 10pm every weekday",
+    "before 5am every weekday",
+    "every weekend"
+  ],
+  "labels": ["dependencies"],
+  "packageRules": [
+    {
+      "description": "Automerge non-major updates",
+      "matchUpdateTypes": ["minor", "patch"],
+      "automerge": true
+    },
+    {
+      "description": "Group Rust dependencies",
+      "matchManagers": ["cargo"],
+      "groupName": "rust dependencies"
+    },
+    {
+      "description": "Group Python dependencies in python_e2e",
+      "matchManagers": ["pep621"],
+      "matchPaths": ["python_e2e/**"],
+      "groupName": "python e2e dependencies"
+    },
+    {
+      "description": "Group Python dev dependencies",
+      "matchManagers": ["pep621"],
+      "matchDepTypes": ["dev", "dependency-groups"],
+      "groupName": "python dev dependencies"
+    },
+    {
+      "description": "Group GitHub Actions updates",
+      "matchManagers": ["github-actions"],
+      "groupName": "github actions"
+    },
+    {
+      "description": "Pin Rust toolchain versions",
+      "matchFiles": ["rust-toolchain.toml"],
+      "rangeStrategy": "pin"
+    }
+  ],
+  "cargo": {
+    "enabled": true,
+    "rangeStrategy": "update-lockfile"
+  },
+  "pep621": {
+    "enabled": true,
+    "rangeStrategy": "update-lockfile"
+  },
+  "rangeStrategy": "auto",
+  "lockFileMaintenance": {
+    "enabled": true,
+    "automerge": true,
+    "schedule": ["before 5am on monday"]
+  },
+  "postUpdateOptions": [
+    "uvLockFileMaintenance"
+  ]
+}
