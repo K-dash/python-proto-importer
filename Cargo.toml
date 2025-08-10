@@ -2,6 +2,14 @@
 name = "python-proto-importer"
 version = "0.1.0"
 edition = "2024"
+description = "Rust-based CLI to streamline Python gRPC/Protobuf workflows: generate code, stabilize imports, and run type checks."
+readme = "README.md"
+license = "Apache-2.0"
+repository = "https://github.com/K-dash/python-proto-importer"
+homepage = "https://github.com/K-dash/python-proto-importer"
+documentation = "https://github.com/K-dash/python-proto-importer#readme"
+keywords = ["protobuf", "grpc", "python", "generator", "cli"]
+categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
 anyhow = "1"
@@ -19,3 +27,15 @@ regex = "1"
 prost = "0.13"
 prost-types = "0.13"
 prost-reflect = "0.14"
+
+# Optional: Python bindings via PyO3 (enabled with `--features python`)
+pyo3 = { version = "0.25.1", features = ["extension-module", "abi3-py38"], optional = true }
+
+[features]
+default = []
+# Enable building Python extension module/wheels
+python = ["pyo3"]
+
+[lib]
+name = "python_proto_importer"
+crate-type = ["rlib", "cdylib"]

@@ -30,6 +30,10 @@ args = ["check", "--all-targets", "--all-features"]
 command = "cargo"
 args = ["fetch"]
 
+[tasks.clean]
+command = "cargo"
+args = ["clean"]
+
 [tasks.install-nextest]
 install_crate = { crate_name = "cargo-nextest", binary = "cargo", test_arg = [
     "nextest",
@@ -77,3 +81,40 @@ args = ["clippy", "${@}", "--", "--no-deps", "-Dwarnings"]
 
 [tasks.test-ci]
 run_task = "test"
+
+
+# ===== Python build =====
+[tasks.python-setup]
+private = true
+condition = { files_modified = { input = ["./pyproject.toml", "uv.lock"], output = [".venv/timestamp.txt"] } }
+script = [
+    "uv venv",
+    "uv sync",
+    "touch .venv/timestamp.txt",
+]
+
+# ===== Python build artifacts (wheels / sdist) =====
+[tasks.python-wheel]
+dependencies = ["python-setup"]
+description = "Build Python wheel using maturin (prefers uvx)"
+script_runner = "@shell"
+script = '''
+set -euo pipefail
+# Ensure project local environment (.venv) is used, not any active external venv
+unset VIRTUAL_ENV || true
+uv run --project . maturin build --features python --release
+'''
+
+[tasks.python-sdist]
+dependencies = ["python-setup"]
+description = "Build Python sdist using maturin (prefers uvx)"
+script_runner = "@shell"
+script = '''
+set -euo pipefail
+unset VIRTUAL_ENV || true
+uv run --project . maturin sdist
+'''
+
+[tasks.python-build-all]
+description = "Build wheel and sdist"
+run_task = { name = ["python-wheel", "python-sdist"], parallel = false }
