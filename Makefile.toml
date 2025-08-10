@@ -71,7 +71,9 @@ pushd python_e2e && makers test && popd
 
 [tasks.clippy-ci]
 command = "cargo"
-args = ["clippy", "--", "--no-deps", "-Dwarnings"]
+# Pass any task args (e.g., --locked) to cargo BEFORE the `--` separator,
+# so they don't get forwarded to clippy by mistake in CI.
+args = ["clippy", "${@}", "--", "--no-deps", "-Dwarnings"]
 
 [tasks.test-ci]
 run_task = "test"

@@ -64,7 +64,7 @@ jobs:
         run: makers test-ci --locked --verbose
 
       - name: Clippy
-        run: makers clippy-ci -- -Dwarnings --locked
+        run: makers clippy-ci --locked
 
       - name: Rustfmt
         run: makers format -- --check
