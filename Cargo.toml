@@ -39,3 +39,15 @@ python = ["pyo3"]
 [lib]
 name = "python_proto_importer"
 crate-type = ["rlib", "cdylib"]
+
+[package.exclude]
+# Exclude CI configs, docs, and local e2e resources from crates.io package
+exclude = [
+  ".github/",
+  "python_e2e/",
+  "doc/",
+  "target/",
+  ".idea/",
+  ".vscode/",
+  ".DS_Store",
+]
