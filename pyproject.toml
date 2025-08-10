@@ -40,4 +40,4 @@ proto-importer = "python_proto_importer:main"
 [tool.maturin]
 features = ["python"]
 manylinux = "off"  # CI で manylinux2014/musllinux を指定
-compatibility = "linux"  # use abi3 across platforms
+# No explicit compatibility here; abi3 is controlled via PyO3 features in Cargo.toml
