@@ -6,6 +6,10 @@ on:
       - 'v*'
   workflow_dispatch:
 
+defaults:
+  run:
+    shell: bash
+
 permissions:
   contents: read
   id-token: write
@@ -68,7 +72,7 @@ jobs:
           args: >-
             build --release --features python -o dist
 
-      - name: Build wheels (macOS)
+      - name: Build wheels (macOS arm64)
         if: ${{ runner.os == 'macOS' }}
         uses: PyO3/maturin-action@v1
         with:
@@ -76,7 +80,7 @@ jobs:
           args: >-
             build --release --features python -o dist
 
-      - name: Build wheels (Windows)
+      - name: Build wheels (Windows x86_64)
         if: ${{ runner.os == 'Windows' }}
         uses: PyO3/maturin-action@v1
         with:
@@ -94,7 +98,13 @@ jobs:
         env:
           MATURIN_PYPI_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
         run: |
-          uv run maturin upload --skip-existing dist/*
+          shopt -s nullglob
+          files=(dist/*)
+          if (( ${#files[@]} )); then
+            uv run maturin upload --skip-existing "${files[@]}"
+          else
+            echo "No distribution files in dist/ on this runner, skipping upload."
+          fi
 
   github-release:
     name: Create GitHub Release (auto notes)
