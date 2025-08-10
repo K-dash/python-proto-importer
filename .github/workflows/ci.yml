@@ -39,15 +39,18 @@ jobs:
         with:
           path: |
             ~/.cargo/bin/cargo-make
+            ~/.cargo/bin/makers
             ~/.cargo/.crates.toml
             ~/.cargo/.crates2.json
-          key: ${{ runner.os }}-cargo-make-${{ env.CARGO_MAKE_VERSION }}-${{ env.HOST_TRIPLE }}
+          key: ${{ runner.os }}-cargo-make-${{ env.CARGO_MAKE_VERSION }}-${{ env.HOST_TRIPLE }}-v2
 
       - name: Install cargo-make via binstall (if cache miss)
         if: steps.cache-cargo-make.outputs.cache-hit != 'true'
         run: |
           cargo binstall -y cargo-make@${CARGO_MAKE_VERSION}
           cargo make --version
+          which makers || echo "makers not found in PATH"
+          ls -la ~/.cargo/bin/
 
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
@@ -58,16 +61,16 @@ jobs:
           tool: nextest
 
       - name: Tests compile
-        run: makers test-ci --no-run --locked
+        run: cargo make test-ci --no-run --locked
 
       - name: Test
-        run: makers test-ci --locked --verbose
+        run: cargo make test-ci --locked --verbose
 
       - name: Clippy
-        run: makers clippy-ci --locked
+        run: cargo make clippy-ci --locked
 
       - name: Rustfmt
-        run: makers format -- --check
+        run: cargo make format -- --check
 
   coverage:
     name: Code Coverage
