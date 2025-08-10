@@ -1,5 +1,7 @@
 name: CI
 on:
+  push:
+    branches: [main]
   pull_request:
   workflow_dispatch:
 
@@ -15,6 +17,10 @@ jobs:
   check:
     name: Test & Lint
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      id-token: write
     env:
       CARGO_MAKE_VERSION: "0.37.24"
 
@@ -33,24 +39,10 @@ jobs:
           curl -Ls https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
           echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
 
-      - name: Cache cargo-make binary
-        id: cache-cargo-make
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/bin/cargo-make
-            ~/.cargo/bin/makers
-            ~/.cargo/.crates.toml
-            ~/.cargo/.crates2.json
-          key: ${{ runner.os }}-cargo-make-${{ env.CARGO_MAKE_VERSION }}-${{ env.HOST_TRIPLE }}-v2
-
-      - name: Install cargo-make via binstall (if cache miss)
-        if: steps.cache-cargo-make.outputs.cache-hit != 'true'
+      - name: Install cargo-make
         run: |
           cargo binstall -y cargo-make@${CARGO_MAKE_VERSION}
           cargo make --version
-          which makers || echo "makers not found in PATH"
-          ls -la ~/.cargo/bin/
 
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
@@ -97,6 +89,8 @@ jobs:
           files: ./cobertura.xml
           fail_ci_if_error: true
           verbose: true
+          name: rust-coverage
+          flags: unittests
 
       - name: Archive code coverage results
         uses: actions/upload-artifact@v4
