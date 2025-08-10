@@ -39,33 +39,10 @@ jobs:
           curl -Ls https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
           echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
 
-      - name: Cache cargo-make binary
-        id: cache-cargo-make
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/bin/cargo-make
-            ~/.cargo/bin/makers
-            ~/.cargo/.crates.toml
-            ~/.cargo/.crates2.json
-          key: ${{ runner.os }}-cargo-make-${{ env.CARGO_MAKE_VERSION }}-${{ env.HOST_TRIPLE }}-v3
-
-      - name: Install cargo-make via binstall (if cache miss)
-        if: steps.cache-cargo-make.outputs.cache-hit != 'true'
+      - name: Install cargo-make
         run: |
           cargo binstall -y cargo-make@${CARGO_MAKE_VERSION}
-
-      - name: Verify cargo-make installation
-        run: |
-          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
-          ls -la ~/.cargo/bin/ || echo "Directory does not exist"
-          if [ -f ~/.cargo/bin/cargo-make ]; then
-            echo "cargo-make found"
-            ~/.cargo/bin/cargo-make --version
-          else
-            echo "cargo-make not found, installing..."
-            cargo binstall -y cargo-make@${CARGO_MAKE_VERSION}
-          fi
+          cargo make --version
 
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
