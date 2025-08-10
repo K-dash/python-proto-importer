@@ -50,7 +50,7 @@ jobs:
       - name: Install cargo-related tools
         uses: taiki-e/install-action@v2
         with:
-          tool: nextest
+          tool: nextest,cargo-tarpaulin
 
       - name: Tests compile
         run: cargo make test-ci --no-run --locked
@@ -58,15 +58,28 @@ jobs:
       - name: Test
         run: cargo make test-ci --locked --verbose
 
+      - name: Generate code coverage
+        run: |
+          # Avoid enabling the optional `python` feature to prevent PyO3 linking on CI
+          cargo tarpaulin --verbose --workspace --timeout 120 --out xml
+
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: cobertura.xml
+          retention-days: 1
+
       - name: Clippy
         run: cargo make clippy-ci --locked
 
       - name: Rustfmt
         run: cargo make format -- --check
 
-  coverage:
-    name: Code Coverage
+  publish-coverage:
+    name: Publish Coverage
     runs-on: ubuntu-latest
+    needs: [check]
     permissions:
       contents: read
       pull-requests: write
@@ -77,38 +90,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Rust (stable)
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Install cargo-tarpaulin
-        uses: taiki-e/install-action@v2
+      - name: Download coverage artifact
+        uses: actions/download-artifact@v4
         with:
-          tool: cargo-tarpaulin
-
-      - name: Generate code coverage
-        run: |
-          # Avoid enabling the optional `python` feature to prevent PyO3 linking on CI
-          cargo tarpaulin --verbose --workspace --timeout 120 --out xml --out html
+          name: coverage-report
 
       - name: Upload to codecov.io
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          files: ./cobertura.xml
+          directory: ./
           fail_ci_if_error: true
-          verbose: true
-          name: rust-coverage
-          flags: unittests
-          override_branch: ${{ github.head_ref || github.ref_name }}
-          override_commit: ${{ github.event.pull_request.head.sha || github.sha }}
-          override_pr: ${{ github.event.pull_request.number }}
-          override_build: ${{ github.run_id }}
-          override_build_url: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-
-      - name: Archive code coverage results
-        uses: actions/upload-artifact@v4
-        with:
-          name: code-coverage-report
-          path: |
-            cobertura.xml
-            tarpaulin-report.html
