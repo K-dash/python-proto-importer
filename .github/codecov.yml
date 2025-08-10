@@ -4,18 +4,31 @@ coverage:
             default:
                 target: 30%
                 threshold: 0%
+                base: auto
+                if_not_found: success
+                if_ci_failed: error
+                only_pulls: false
         patch:
             default:
                 target: auto
                 threshold: 1%
+                base: auto
+                if_not_found: success
+                only_pulls: false
 
 comment:
     layout: "reach,diff,flags,files,footer"
     behavior: default
     require_changes: false
     require_base: false
-    require_head: true
-    after_n_builds: 1
-    
+    require_head: false
+
 github_checks:
     annotations: false
+
+codecov:
+    require_ci_to_pass: false
+    notify:
+        wait_for_ci: false
+    branch: main
+    strict_yaml_branch: main
