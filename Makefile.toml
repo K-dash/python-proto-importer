@@ -1,6 +1,9 @@
 [config]
 skip_core_tasks = true
 
+[env]
+LLVM_COV_COMMON_ARGS = "llvm-cov nextest --all-features --status-level all --test-threads=1 --no-clean"
+
 [tasks.default]
 run_task = { name = ["format", "lint"], parallel = true }
 
@@ -19,6 +22,30 @@ args = ["clippy", "--all-targets", "--all-features", "--", "-Dwarnings"]
 command = "cargo"
 args = ["build", "--all-targets"]
 
+[tasks.check]
+command = "cargo"
+args = ["check", "--all-targets", "--all-features"]
+
+[tasks.fetch]
+command = "cargo"
+args = ["fetch"]
+
+[tasks.install-nextest]
+install_crate = { crate_name = "cargo-nextest", binary = "cargo", test_arg = [
+    "nextest",
+    "--help",
+] }
+
+[tasks.install-llvm-cov]
+install_crate = { crate_name = "cargo-llvm-cov", binary = "cargo", test_arg = [
+    "llvm-cov",
+    "--help",
+] }
+
+[tasks.cov-clean]
+command = "cargo"
+args = ["llvm-cov", "clean"]
+
 [tasks.test-all]
 run_task = { name = ["test", "python-e2e"] }
 
@@ -26,8 +53,25 @@ run_task = { name = ["test", "python-e2e"] }
 command = "cargo"
 args = ["test", "--all"]
 
+[tasks.test-cov]
+dependencies = ["install-nextest", "install-llvm-cov", "cov-clean"]
+command = "cargo"
+args = ["@@split(LLVM_COV_COMMON_ARGS, )"]
+
+[tasks.cov-html]
+dependencies = ["install-nextest", "install-llvm-cov", "cov-clean"]
+command = "cargo"
+args = ["@@split(LLVM_COV_COMMON_ARGS, )", "--open"]
+
 [tasks.python-e2e]
 script_runner = "@shell"
 script = '''
 pushd python_e2e && makers test && popd
 '''
+
+[tasks.clippy-ci]
+command = "cargo"
+args = ["clippy", "--", "--no-deps", "-Dwarnings"]
+
+[tasks.test-ci]
+run_task = "test"
