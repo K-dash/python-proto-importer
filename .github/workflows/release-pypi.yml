@@ -73,7 +73,7 @@ jobs:
       #     args: >-
       #       --release --features python -o dist
 
-      - name: Build wheels (macOS arm64)
+      - name: Build wheels (macOS wheels)
         if: ${{ runner.os == 'macOS' }}
         uses: PyO3/maturin-action@v1
         with:
@@ -81,7 +81,7 @@ jobs:
           args: >-
             --release --features python -o dist
 
-      - name: Build wheels (Windows x86_64)
+      - name: Build wheels (Windows)
         if: ${{ runner.os == 'Windows' }}
         uses: PyO3/maturin-action@v1
         with:
