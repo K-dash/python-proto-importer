@@ -9,6 +9,7 @@ run_task = { name = ["test"], parallel = true }
 private = true
 condition = { files_modified = { input = ["./pyproject.toml", "uv.lock"], output = [".venv/timestamp.txt"] } }
 script = [
+    "unset VIRTUAL_ENV || true",
     "uv venv",
     "uv sync",
     "touch .venv/timestamp.txt",
@@ -48,15 +49,28 @@ rm -rf src/proto_importer_e2e/generated
 dependencies = ["private-setup"]
 script_runner = "@shell"
 script = '''
+set -euo pipefail
+unset VIRTUAL_ENV || true
+
+# Function to ensure cleanup always happens
+cleanup() {
+    echo '🧹 cleaning generated files...'
+    rm -rf src/proto_importer_e2e/generated
+}
+
+# Set trap to ensure cleanup on exit (success or failure)
+trap cleanup EXIT
+
 echo '📦 clean generated files...'
 rm -rf src/proto_importer_e2e/generated
+
 echo '🔨 build Rust binary...'
 cd .. && cargo build --release
 cd python_e2e
+
 echo '🧪 run tests...'
 uv run pytest
-echo '🧹 clean generated files...'
-rm -rf src/proto_importer_e2e/generated
+
 echo '✅ done!'
 '''
 

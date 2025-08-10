@@ -7,6 +7,22 @@
 
 Rust-based CLI to streamline Python gRPC/Protobuf workflows: generate code, stabilize imports, and run type checks in a single command. Ships as a PyPI package (via maturin) and as a Rust crate.
 
+### Why this project (Motivation)
+
+- **Fragile imports from stock protoc output**: vanilla `grpcio-tools`/`protoc` emit absolute imports (e.g. `import foo.bar_pb2`) that break when you move the generated tree, split packages, or embed code under a different root. This tool rewrites them into stable **relative imports** inside the generated package.
+- **Package structure friction**: projects often forget to add `__init__.py` or need namespace packages. We can auto-create `__init__.py` (opt-in/out) to make the tree importable and CI-friendly.
+- **Type-checking pain**: mixing generated `.py` and `.pyi` frequently leads to noisy type warnings. We optionally integrate with `mypy-protobuf` / `mypy-grpc`, and recommend `.pyi`-first verification via Pyright.
+- **Non-reproducible, multi-step scripts**: teams maintain ad‑hoc scripts for generation, postprocessing, and verification. This CLI runs the full pipeline in one command and stores configuration in `pyproject.toml`.
+- **Silent breakages**: generated trees “import” locally but fail in CI or different PYTHONPATHs. A built-in **import dry-run** validates the entire package layout deterministically.
+
+### How it differs from existing tools
+
+- **Postprocess with awareness of your output tree**: relative-import rewriting targets only `_pb2[_grpc]` modules that actually exist beneath your configured `out`, leaving third‑party modules (e.g. `google.protobuf`) untouched by default.
+- **Package hygiene by default**: opt-in `__init__.py` generation and path‑robust computation (uses canonical paths) reduce environment‑dependent surprises.
+- **Verification built-in**: import dry‑run for all generated modules, plus easy hooks to run `mypy`/`pyright` as part of the same command.
+- **Single source of truth in `pyproject.toml`**: keeps your team’s proto generation policy declarative and reviewable.
+- **Fast, portable binary**: implemented in Rust with a small runtime footprint; distributed both on PyPI (wheel) and crates.io.
+
 - **Backends**: `protoc` (v0.1), `buf generate` (planned v0.2)
 - **Postprocess**: convert internal imports to relative; generate `__init__.py`
 - **Typing**: optional `mypy-protobuf` / `mypy-grpc` emission
