@@ -67,6 +67,13 @@ jobs:
   coverage:
     name: Code Coverage
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      checks: write
+      actions: read
+      statuses: write
+      id-token: write
     steps:
       - uses: actions/checkout@v4
 
@@ -92,6 +99,11 @@ jobs:
           verbose: true
           name: rust-coverage
           flags: unittests
+          override_branch: ${{ github.head_ref || github.ref_name }}
+          override_commit: ${{ github.event.pull_request.head.sha || github.sha }}
+          override_pr: ${{ github.event.pull_request.number }}
+          override_build: ${{ github.run_id }}
+          override_build_url: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
       - name: Archive code coverage results
         uses: actions/upload-artifact@v4
