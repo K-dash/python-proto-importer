@@ -58,35 +58,36 @@ jobs:
         if: ${{ runner.os == 'Linux' && matrix.target == 'manylinux2014' }}
         uses: PyO3/maturin-action@v1
         with:
-          rust-toolchain: stable
-          manylinux: manylinux2014
+          manylinux: '2014'
+          command: build
           args: >-
-            build --release --features python -o dist
+            --release --features python -o dist
 
-      - name: Build wheels (Linux musllinux)
-        if: ${{ runner.os == 'Linux' && matrix.target == 'musllinux_1_2' }}
-        uses: PyO3/maturin-action@v1
-        with:
-          rust-toolchain: stable
-          manylinux: musllinux_1_2
-          args: >-
-            build --release --features python -o dist
+      # If musllinux is needed, add a matrix entry and a step like below:
+      # - name: Build wheels (Linux musllinux)
+      #   if: ${{ runner.os == 'Linux' && matrix.target == 'musllinux_1_2' }}
+      #   uses: PyO3/maturin-action@v1
+      #   with:
+      #     manylinux: musllinux_1_2
+      #     command: build
+      #     args: >-
+      #       --release --features python -o dist
 
       - name: Build wheels (macOS arm64)
         if: ${{ runner.os == 'macOS' }}
         uses: PyO3/maturin-action@v1
         with:
-          rust-toolchain: stable
+          command: build
           args: >-
-            build --release --features python -o dist
+            --release --features python -o dist
 
       - name: Build wheels (Windows x86_64)
         if: ${{ runner.os == 'Windows' }}
         uses: PyO3/maturin-action@v1
         with:
-          rust-toolchain: stable
+          command: build
           args: >-
-            build --release --features python -o dist
+            --release --features python -o dist
 
       - name: Build sdist (once)
         if: ${{ runner.os == 'Linux' && matrix.target == 'manylinux2014' }}
