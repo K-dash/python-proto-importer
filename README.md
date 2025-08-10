@@ -3,6 +3,7 @@
 [![Crates.io](https://img.shields.io/crates/v/python-proto-importer.svg)](https://crates.io/crates/python-proto-importer)
 [![PyPI](https://img.shields.io/pypi/v/python-proto-importer.svg)](https://pypi.org/project/python-proto-importer/)
 [![CI](https://github.com/K-dash/python-proto-importer/actions/workflows/ci.yml/badge.svg)](https://github.com/K-dash/python-proto-importer/actions)
+[![codecov](https://codecov.io/gh/K-dash/python-proto-importer/graph/badge.svg?token=iqNMDrK6Er)](https://codecov.io/gh/K-dash/python-proto-importer)
 
 Rust-based CLI to streamline Python gRPC/Protobuf workflows: generate code, stabilize imports, and run type checks in a single command. Ships as a PyPI package (via maturin) and as a Rust crate.
 
