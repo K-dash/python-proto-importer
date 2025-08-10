@@ -1,0 +1,32 @@
+[build-system]
+requires = ["maturin>=1.4,<2"]
+build-backend = "maturin"
+
+[project]
+name = "python-proto-importer"
+description = "Rust-based CLI to streamline Python gRPC/Protobuf workflows"
+readme = "README.md"
+authors = [{ name = "K-dash" }]
+license = { text = "Apache-2.0" }
+requires-python = ">=3.8"
+keywords = ["protobuf", "grpc", "python", "generator", "cli"]
+classifiers = [
+  "Programming Language :: Python",
+  "Programming Language :: Rust",
+  "License :: OSI Approved :: Apache Software License",
+  "Operating System :: OS Independent",
+]
+dynamic = ["version"]
+dependencies = ["maturin>=1.4,<2"]
+
+[project.urls]
+Homepage = "https://github.com/K-dash/python-proto-importer"
+Repository = "https://github.com/K-dash/python-proto-importer"
+
+[project.scripts]
+proto-importer = "python_proto_importer:main"
+
+[tool.maturin]
+features = ["python"]
+# build manylinux wheels by default
+manylinux = "off"  # use 'manylinux2014' in CI; local dev often uses system python
