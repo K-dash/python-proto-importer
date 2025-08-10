@@ -2,7 +2,7 @@
 skip_core_tasks = true
 
 [env]
-LLVM_COV_COMMON_ARGS = "llvm-cov nextest --all-features --status-level all --test-threads=1 --no-clean"
+TARPAULIN_COMMON_ARGS = "tarpaulin --all-features --timeout 120 --skip-clean"
 
 [tasks.default]
 run_task = { name = ["format", "lint"], parallel = true }
@@ -36,15 +36,15 @@ install_crate = { crate_name = "cargo-nextest", binary = "cargo", test_arg = [
     "--help",
 ] }
 
-[tasks.install-llvm-cov]
-install_crate = { crate_name = "cargo-llvm-cov", binary = "cargo", test_arg = [
-    "llvm-cov",
+[tasks.install-tarpaulin]
+install_crate = { crate_name = "cargo-tarpaulin", binary = "cargo", test_arg = [
+    "tarpaulin",
     "--help",
 ] }
 
 [tasks.cov-clean]
 command = "cargo"
-args = ["llvm-cov", "clean"]
+args = ["clean"]
 
 [tasks.test-all]
 run_task = { name = ["test", "python-e2e"] }
@@ -54,14 +54,14 @@ command = "cargo"
 args = ["test", "--all"]
 
 [tasks.test-cov]
-dependencies = ["install-nextest", "install-llvm-cov", "cov-clean"]
+dependencies = ["install-tarpaulin", "cov-clean"]
 command = "cargo"
-args = ["@@split(LLVM_COV_COMMON_ARGS, )"]
+args = ["@@split(TARPAULIN_COMMON_ARGS, )"]
 
 [tasks.cov-html]
-dependencies = ["install-nextest", "install-llvm-cov", "cov-clean"]
+dependencies = ["install-tarpaulin", "cov-clean"]
 command = "cargo"
-args = ["@@split(LLVM_COV_COMMON_ARGS, )", "--open"]
+args = ["@@split(TARPAULIN_COMMON_ARGS, )", "--out", "Html"]
 
 [tasks.python-e2e]
 script_runner = "@shell"
