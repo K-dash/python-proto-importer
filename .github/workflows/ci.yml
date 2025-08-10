@@ -57,6 +57,11 @@ jobs:
           cargo make --version
           which makers || echo "makers not found in PATH"
           ls -la ~/.cargo/bin/
+      
+      - name: Ensure cargo-make is in PATH
+        run: |
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+          cargo make --version
 
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
