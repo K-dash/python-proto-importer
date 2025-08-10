@@ -24,8 +24,6 @@ jobs:
         include:
           - os: ubuntu-22.04
             target: manylinux2014
-          - os: ubuntu-22.04
-            target: musllinux_1_2
           - os: macos-14
             target: macos
           - os: windows-2022
@@ -52,14 +50,23 @@ jobs:
       - name: Cache Rust
         uses: Swatinem/rust-cache@v2
 
-      - name: Build wheels (Linux)
-        if: ${{ runner.os == 'Linux' }}
+      - name: Build wheels (Linux manylinux2014)
+        if: ${{ runner.os == 'Linux' && matrix.target == 'manylinux2014' }}
         uses: PyO3/maturin-action@v1
         with:
           rust-toolchain: stable
-          manylinux: ${{ matrix.target == 'musllinux_1_2' && 'musllinux_1_2' || 'manylinux2014' }}
+          manylinux: manylinux2014
           args: >-
-            build --release --features python
+            build --release --features python -o dist
+
+      - name: Build wheels (Linux musllinux)
+        if: ${{ runner.os == 'Linux' && matrix.target == 'musllinux_1_2' }}
+        uses: PyO3/maturin-action@v1
+        with:
+          rust-toolchain: stable
+          manylinux: musllinux_1_2
+          args: >-
+            build --release --features python -o dist
 
       - name: Build wheels (macOS)
         if: ${{ runner.os == 'macOS' }}
@@ -67,7 +74,7 @@ jobs:
         with:
           rust-toolchain: stable
           args: >-
-            build --release --features python
+            build --release --features python -o dist
 
       - name: Build wheels (Windows)
         if: ${{ runner.os == 'Windows' }}
@@ -75,19 +82,19 @@ jobs:
         with:
           rust-toolchain: stable
           args: >-
-            build --release --features python
+            build --release --features python -o dist
 
       - name: Build sdist (once)
         if: ${{ runner.os == 'Linux' && matrix.target == 'manylinux2014' }}
         run: |
-          uv run maturin sdist
+          uv run maturin sdist -o dist
 
       - name: Publish to PyPI
         if: ${{ env.PYPI_API_TOKEN != '' }}
         env:
           MATURIN_PYPI_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
         run: |
-          uv run maturin upload --skip-existing target/wheels/*
+          uv run maturin upload --skip-existing dist/*
 
   github-release:
     name: Create GitHub Release (auto notes)
