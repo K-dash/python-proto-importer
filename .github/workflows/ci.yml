@@ -1,0 +1,107 @@
+name: CI
+on:
+  pull_request:
+  workflow_dispatch:
+
+defaults:
+  run:
+    shell: bash
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Test & Lint
+    runs-on: ubuntu-latest
+    env:
+      CARGO_MAKE_VERSION: "0.37.24"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Compute host triple
+        run: |
+          echo "HOST_TRIPLE=$(rustc -vV | awk '/host:/ {print $2}')" >> "$GITHUB_ENV"
+
+      - name: Install cargo-binstall
+        run: |
+          curl -Ls https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+
+      - name: Cache cargo-make binary
+        id: cache-cargo-make
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/cargo-make
+            ~/.cargo/bin/makers
+            ~/.cargo/.crates.toml
+            ~/.cargo/.crates2.json
+          key: ${{ runner.os }}-cargo-make-${{ env.CARGO_MAKE_VERSION }}-${{ env.HOST_TRIPLE }}-v2
+
+      - name: Install cargo-make via binstall (if cache miss)
+        if: steps.cache-cargo-make.outputs.cache-hit != 'true'
+        run: |
+          cargo binstall -y cargo-make@${CARGO_MAKE_VERSION}
+          cargo make --version
+          which makers || echo "makers not found in PATH"
+          ls -la ~/.cargo/bin/
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install cargo-related tools
+        uses: taiki-e/install-action@v2
+        with:
+          tool: nextest
+
+      - name: Tests compile
+        run: cargo make test-ci --no-run --locked
+
+      - name: Test
+        run: cargo make test-ci --locked --verbose
+
+      - name: Clippy
+        run: cargo make clippy-ci --locked
+
+      - name: Rustfmt
+        run: cargo make format -- --check
+
+  coverage:
+    name: Code Coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install cargo-tarpaulin
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-tarpaulin
+
+      - name: Generate code coverage
+        run: |
+          cargo tarpaulin --verbose --all-features --workspace --timeout 120 --out xml --out html
+
+      - name: Upload to codecov.io
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./cobertura.xml
+          fail_ci_if_error: true
+          verbose: true
+
+      - name: Archive code coverage results
+        uses: actions/upload-artifact@v4
+        with:
+          name: code-coverage-report
+          path: |
+            cobertura.xml
+            tarpaulin-report.html

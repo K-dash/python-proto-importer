@@ -47,20 +47,20 @@ impl<'a> ProtocRunner<'a> {
             cmd.arg("-m").arg("grpc_tools.protoc");
         }
         // Ensure protoc plugins installed in the same env are discoverable
-        if let Some(parent) = std::path::Path::new(py).parent() {
-            if let Some(parent_str) = parent.to_str() {
-                // Only modify PATH if parent directory actually exists and is not empty
-                if !parent_str.is_empty() && std::path::Path::new(parent_str).exists() {
-                    use std::env;
-                    let mut buf = std::ffi::OsString::new();
-                    buf.push(parent_str);
-                    buf.push(if cfg!(windows) { ";" } else { ":" });
-                    if let Some(existing) = env::var_os("PATH") {
-                        buf.push(existing);
-                    }
-                    cmd.env("PATH", buf);
-                }
+        if let Some(parent_str) = std::path::Path::new(py)
+            .parent()
+            .and_then(|p| p.to_str())
+            .filter(|s| !s.is_empty())
+            .filter(|s| std::path::Path::new(s).exists())
+        {
+            use std::env;
+            let mut buf = std::ffi::OsString::new();
+            buf.push(parent_str);
+            buf.push(if cfg!(windows) { ";" } else { ":" });
+            if let Some(existing) = env::var_os("PATH") {
+                buf.push(existing);
             }
+            cmd.env("PATH", buf);
         }
 
         // Output directories
@@ -159,19 +159,20 @@ impl<'a> ProtocRunner<'a> {
         }
 
         // PATH handling
-        if let Some(parent) = std::path::Path::new(py).parent() {
-            if let Some(parent_str) = parent.to_str() {
-                if !parent_str.is_empty() && std::path::Path::new(parent_str).exists() {
-                    use std::env;
-                    let mut buf = std::ffi::OsString::new();
-                    buf.push(parent_str);
-                    buf.push(if cfg!(windows) { ";" } else { ":" });
-                    if let Some(existing) = env::var_os("PATH") {
-                        buf.push(existing);
-                    }
-                    cmd.env("PATH", buf);
-                }
+        if let Some(parent_str) = std::path::Path::new(py)
+            .parent()
+            .and_then(|p| p.to_str())
+            .filter(|s| !s.is_empty())
+            .filter(|s| std::path::Path::new(s).exists())
+        {
+            use std::env;
+            let mut buf = std::ffi::OsString::new();
+            buf.push(parent_str);
+            buf.push(if cfg!(windows) { ";" } else { ":" });
+            if let Some(existing) = env::var_os("PATH") {
+                buf.push(existing);
             }
+            cmd.env("PATH", buf);
         }
 
         // Output arguments

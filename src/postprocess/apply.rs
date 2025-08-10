@@ -61,6 +61,7 @@ fn compute_relative_import_prefix(from_dir: &Path, to_dir: &Path) -> Option<(usi
     ))
 }
 
+#[allow(clippy::collapsible_if)]
 fn rewrite_lines_in_content(
     content: &str,
     file_dir: &Path,
@@ -181,6 +182,7 @@ fn rewrite_lines_in_content(
                         parts.truncate(parts.len() - 2);
                     }
                     let module = parts.join(" ");
+                    let mut rewritten = false;
                     if (module.ends_with("_pb2") || module.ends_with("_pb2_grpc"))
                         && !(exclude_google && module.starts_with("google.protobuf"))
                     {
@@ -208,12 +210,14 @@ fn rewrite_lines_in_content(
                                 }
                                 changed = true;
                                 any_local_change = true;
-                                continue;
+                                rewritten = true;
                             }
                         }
                     }
-                    // Fallback: keep original token as a separate import line
-                    out.push_str(&format!("{indent}import {token}\n"));
+                    if !rewritten {
+                        // Fallback: keep original token as a separate import line
+                        out.push_str(&format!("{indent}import {token}\n"));
+                    }
                 }
                 if any_local_change {
                     continue;
@@ -509,10 +513,11 @@ pub fn apply_rewrites_in_tree(
             let content = fs::read_to_string(p).with_context(|| format!("read {}", p.display()))?;
             // Pre-filter: if allowed_basenames (from FDS) are provided,
             // skip files that don't contain any target basename
-            if let Some(allowed) = allowed_basenames {
-                if !allowed.iter().any(|b| content.contains(b)) {
-                    continue;
-                }
+            if matches!(
+                allowed_basenames,
+                Some(allowed) if !allowed.iter().any(|b| content.contains(b))
+            ) {
+                continue;
             }
             let (new_content, changed) = rewrite_lines_in_content(
                 &content,
@@ -704,7 +709,7 @@ mod tests {
                 .iter()
                 .any(|l| l.starts_with("from .pkg.sub import b_pb2 as bb"))
         );
-        assert!(lines.iter().any(|l| *l == "import json"));
+        assert!(lines.contains(&"import json"));
     }
 
     #[test]

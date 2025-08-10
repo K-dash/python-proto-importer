@@ -26,11 +26,13 @@ pub fn collect_generated_basenames_from_bytes(bytes: &[u8]) -> Result<HashSet<St
     let fds = FileDescriptorSet::decode(bytes).context("decode FDS via prost-types failed")?;
     let mut set = HashSet::new();
     for file in fds.file {
-        if let Some(name) = file.name {
-            if let Some(stem) = Path::new(&name).file_stem().and_then(|s| s.to_str()) {
-                set.insert(format!("{stem}_pb2"));
-                set.insert(format!("{stem}_pb2_grpc"));
-            }
+        if let Some(stem) = file
+            .name
+            .as_deref()
+            .and_then(|name| Path::new(name).file_stem().and_then(|s| s.to_str()))
+        {
+            set.insert(format!("{stem}_pb2"));
+            set.insert(format!("{stem}_pb2_grpc"));
         }
     }
     Ok(set)

@@ -331,15 +331,11 @@ mod commands {
 
         // 2) optional type check commands
         if let Some(v) = &cfg.verify {
-            if let Some(cmd) = &v.mypy_cmd {
-                if !cmd.is_empty() {
-                    run_cmd(cmd).context("mypy_cmd failed")?;
-                }
+            if let Some(cmd) = v.mypy_cmd.as_deref().filter(|cmd| !cmd.is_empty()) {
+                run_cmd(cmd).context("mypy_cmd failed")?;
             }
-            if let Some(cmd) = &v.pyright_cmd {
-                if !cmd.is_empty() {
-                    run_cmd(cmd).context("pyright_cmd failed")?;
-                }
+            if let Some(cmd) = v.pyright_cmd.as_deref().filter(|cmd| !cmd.is_empty()) {
+                run_cmd(cmd).context("pyright_cmd failed")?;
             }
         }
         Ok(())
@@ -354,10 +350,8 @@ mod commands {
 
         // Check if parent directory exists and use it as PYTHONPATH
         let parent = out_abs.parent();
-        if let Some(parent_dir) = parent {
-            if parent_dir.exists() {
-                return Ok((parent_dir.to_path_buf(), out_name.to_string()));
-            }
+        if let Some(parent_dir) = parent.filter(|p| p.exists()) {
+            return Ok((parent_dir.to_path_buf(), out_name.to_string()));
         }
 
         // Fallback: use output directory directly (for backward compatibility)
@@ -862,22 +856,24 @@ mod doctor {
         } else {
             cmd.arg("-c").arg(&code);
         }
-        if let Ok(out) = cmd.output() {
-            if out.status.success() {
-                let s = String::from_utf8_lossy(&out.stdout);
-                let t = s.trim();
-                if let Some(rest) = t.strip_prefix('1') {
-                    let ver = rest.trim();
-                    let ver = ver.strip_prefix(' ').unwrap_or(ver);
-                    return (
-                        true,
-                        if ver.is_empty() {
-                            None
-                        } else {
-                            Some(ver.to_string())
-                        },
-                    );
-                }
+        let out_opt = match cmd.output() {
+            Ok(o) if o.status.success() => Some(o),
+            _ => None,
+        };
+        if let Some(out) = out_opt {
+            let s = String::from_utf8_lossy(&out.stdout);
+            let t = s.trim();
+            if let Some(rest) = t.strip_prefix('1') {
+                let ver = rest.trim();
+                let ver = ver.strip_prefix(' ').unwrap_or(ver);
+                return (
+                    true,
+                    if ver.is_empty() {
+                        None
+                    } else {
+                        Some(ver.to_string())
+                    },
+                );
             }
         }
         (false, None)
