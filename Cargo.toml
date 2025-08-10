@@ -10,6 +10,15 @@ homepage = "https://github.com/K-dash/python-proto-importer"
 documentation = "https://github.com/K-dash/python-proto-importer#readme"
 keywords = ["protobuf", "grpc", "python", "generator", "cli"]
 categories = ["command-line-utilities", "development-tools"]
+exclude = [
+  ".github/",
+  "python_e2e/",
+  "doc/",
+  "target/",
+  ".idea/",
+  ".vscode/",
+  ".DS_Store",
+]
 
 [dependencies]
 anyhow = "1"

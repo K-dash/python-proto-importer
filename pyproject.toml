@@ -6,15 +6,23 @@ build-backend = "maturin"
 name = "python-proto-importer"
 description = "Rust-based CLI to streamline Python gRPC/Protobuf workflows"
 readme = "README.md"
-authors = [{ name = "K-dash" }]
+authors = [{ name = "K-dash", email = "maintainers+python-proto-importer@kdash.dev" }]
 license = { text = "Apache-2.0" }
-requires-python = ">=3.8"
+requires-python = ">=3.11"
 keywords = ["protobuf", "grpc", "python", "generator", "cli"]
 classifiers = [
   "Programming Language :: Python",
   "Programming Language :: Rust",
   "License :: OSI Approved :: Apache Software License",
   "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Operating System :: POSIX :: Linux",
+  "Operating System :: MacOS :: MacOS X",
+  "Operating System :: Microsoft :: Windows",
 ]
 dynamic = ["version"]
 dependencies = ["maturin>=1.4,<2"]
@@ -28,5 +36,5 @@ proto-importer = "python_proto_importer:main"
 
 [tool.maturin]
 features = ["python"]
-# build manylinux wheels by default
-manylinux = "off"  # use 'manylinux2014' in CI; local dev often uses system python
+manylinux = "off"  # CI uses manylinux2014/musllinux; local dev often uses system python
+# No explicit compatibility here; abi3 is controlled via PyO3 features in Cargo.toml
