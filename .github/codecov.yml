@@ -4,3 +4,15 @@ coverage:
             default:
                 target: 30%
                 threshold: 0%
+        patch:
+            default:
+                target: auto
+                threshold: 1%
+
+comment:
+    layout: "reach,diff,flags,files,footer"
+    behavior: default
+    require_changes: false
+    require_base: false
+    require_head: true
+    after_n_builds: 1
