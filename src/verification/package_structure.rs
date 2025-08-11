@@ -113,3 +113,115 @@ pub fn determine_package_structure(out_abs: &Path) -> Result<(PathBuf, String)> 
     );
     Ok((out_abs.to_path_buf(), String::new()))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use std::io;
+    use tempfile::TempDir;
+
+    #[test]
+    fn test_determine_package_structure_legacy_with_parent() -> io::Result<()> {
+        let temp_dir = TempDir::new()?;
+        let parent_path = temp_dir.path();
+        let out_path = parent_path.join("my_package");
+        fs::create_dir(&out_path)?;
+
+        let result = determine_package_structure_legacy(&out_path).unwrap();
+
+        assert_eq!(result.0, parent_path);
+        assert_eq!(result.1, "my_package");
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_determine_package_structure_legacy_no_parent() {
+        let root_path = PathBuf::from("/");
+        let result = determine_package_structure_legacy(&root_path).unwrap();
+
+        // For root path, there's no parent, so it falls back to using the path itself
+        assert_eq!(result.0, root_path);
+        assert_eq!(result.1, String::new());
+    }
+
+    #[test]
+    fn test_determine_package_structure_simple_case() -> io::Result<()> {
+        let temp_dir = TempDir::new()?;
+        let parent_path = temp_dir.path();
+        let out_path = parent_path.join("simple_package");
+        fs::create_dir(&out_path)?;
+
+        let result = determine_package_structure(&out_path).unwrap();
+
+        // Parent has no __init__.py, so should use standard structure
+        assert_eq!(result.0, parent_path);
+        assert_eq!(result.1, "simple_package");
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_determine_package_structure_nested_package() -> io::Result<()> {
+        let temp_dir = TempDir::new()?;
+        let grandparent_path = temp_dir.path();
+        let parent_path = grandparent_path.join("parent_pkg");
+        let out_path = parent_path.join("child_pkg");
+
+        fs::create_dir_all(&out_path)?;
+        fs::write(parent_path.join("__init__.py"), "")?; // Make parent a package
+
+        let result = determine_package_structure(&out_path).unwrap();
+
+        // Parent has __init__.py, so should use nested structure
+        assert_eq!(result.0, grandparent_path);
+        assert_eq!(result.1, "parent_pkg.child_pkg");
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_determine_package_structure_nested_package_no_grandparent() -> io::Result<()> {
+        let temp_dir = TempDir::new()?;
+        let parent_path = temp_dir.path().join("parent_pkg");
+        let out_path = parent_path.join("child_pkg");
+
+        fs::create_dir_all(&out_path)?;
+        fs::write(parent_path.join("__init__.py"), "")?;
+
+        let result = determine_package_structure(&out_path).unwrap();
+
+        // Grandparent exists (temp_dir), so should use nested structure
+        assert_eq!(result.0, temp_dir.path());
+        assert_eq!(result.1, "parent_pkg.child_pkg");
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_determine_package_structure_fallback_to_self() {
+        let nonexistent_path = PathBuf::from("/nonexistent/path/package");
+
+        let result = determine_package_structure(&nonexistent_path).unwrap();
+
+        // No parent exists, should fallback to using path itself with empty package name
+        assert_eq!(result.0, nonexistent_path);
+        assert_eq!(result.1, String::new());
+    }
+
+    #[test]
+    fn test_determine_package_structure_empty_parent_name() -> io::Result<()> {
+        let temp_dir = TempDir::new()?;
+        let parent_path = temp_dir.path().join("");
+        let out_path = parent_path.join("package");
+
+        // This creates an unusual situation where parent name might be empty
+        let result = determine_package_structure(&out_path);
+
+        // Should handle gracefully
+        assert!(result.is_ok());
+
+        Ok(())
+    }
+}

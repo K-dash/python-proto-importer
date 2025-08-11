@@ -57,3 +57,88 @@ except Exception as e:
 
     script
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_create_import_test_script_empty_modules() {
+        let script = create_import_test_script("test_package", &[]);
+
+        assert!(script.contains("import sys"));
+        assert!(script.contains("import importlib"));
+        assert!(script.contains("import traceback"));
+        assert!(script.contains("failed = []"));
+        assert!(script.contains("succeeded = []"));
+        assert!(script.contains("IMPORT_TEST_SUMMARY"));
+        assert!(script.contains("IMPORT_TEST_SUCCESS"));
+    }
+
+    #[test]
+    fn test_create_import_test_script_single_module() {
+        let modules = vec!["test_module".to_string()];
+        let script = create_import_test_script("test_package", &modules);
+
+        assert!(script.contains("test_module -> test_package.test_module"));
+        assert!(script.contains("importlib.import_module('test_package.test_module')"));
+        assert!(script.contains("succeeded.append('test_module')"));
+        assert!(script.contains("ImportError"));
+        assert!(script.contains("ModuleNotFoundError"));
+        assert!(script.contains("SyntaxError"));
+    }
+
+    #[test]
+    fn test_create_import_test_script_multiple_modules() {
+        let modules = vec![
+            "module1".to_string(),
+            "module2".to_string(),
+            "subpkg.module3".to_string(),
+        ];
+        let script = create_import_test_script("mypackage", &modules);
+
+        assert!(script.contains("module1 -> mypackage.module1"));
+        assert!(script.contains("module2 -> mypackage.module2"));
+        assert!(script.contains("subpkg.module3 -> mypackage.subpkg.module3"));
+        assert!(script.contains("importlib.import_module('mypackage.module1')"));
+        assert!(script.contains("importlib.import_module('mypackage.module2')"));
+        assert!(script.contains("importlib.import_module('mypackage.subpkg.module3')"));
+    }
+
+    #[test]
+    fn test_create_import_test_script_empty_package_name() {
+        let modules = vec!["standalone_module".to_string()];
+        let script = create_import_test_script("", &modules);
+
+        assert!(script.contains("standalone_module -> standalone_module"));
+        assert!(script.contains("importlib.import_module('standalone_module')"));
+        assert!(script.contains("succeeded.append('standalone_module')"));
+    }
+
+    #[test]
+    fn test_create_import_test_script_error_handling() {
+        let modules = vec!["test_module".to_string()];
+        let script = create_import_test_script("pkg", &modules);
+
+        assert!(script.contains("relative import"));
+        assert!(script.contains("relative import context issue"));
+        assert!(script.contains("failed.append"));
+        assert!(script.contains("ImportError:"));
+        assert!(script.contains("ModuleNotFoundError:"));
+        assert!(script.contains("SyntaxError:"));
+        assert!(script.contains("Exception:"));
+    }
+
+    #[test]
+    fn test_create_import_test_script_output_format() {
+        let modules = vec!["mod1".to_string(), "mod2".to_string()];
+        let script = create_import_test_script("pkg", &modules);
+
+        assert!(script.contains("IMPORT_TEST_SUMMARY:succeeded="));
+        assert!(script.contains(",failed="));
+        assert!(script.contains(",total="));
+        assert!(script.contains("IMPORT_ERROR:"));
+        assert!(script.contains("sys.exit(1)"));
+        assert!(script.contains("IMPORT_TEST_SUCCESS:all_modules_imported_successfully"));
+    }
+}

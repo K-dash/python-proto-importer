@@ -13,3 +13,39 @@ pub fn run_cmd(cmd: &[String]) -> Result<()> {
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_run_cmd_empty_command() {
+        let cmd = vec![];
+        let result = run_cmd(&cmd);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("empty command"));
+    }
+
+    #[test]
+    fn test_run_cmd_success() {
+        let cmd = vec!["echo".to_string(), "hello".to_string()];
+        let result = run_cmd(&cmd);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_run_cmd_failure() {
+        let cmd = vec!["false".to_string()];
+        let result = run_cmd(&cmd);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("command failed"));
+    }
+
+    #[test]
+    fn test_run_cmd_nonexistent_program() {
+        let cmd = vec!["nonexistent_program_xyz123".to_string()];
+        let result = run_cmd(&cmd);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("failed to run"));
+    }
+}

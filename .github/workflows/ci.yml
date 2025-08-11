@@ -61,7 +61,7 @@ jobs:
       - name: Generate code coverage
         run: |
           # Avoid enabling the optional `python` feature to prevent PyO3 linking on CI
-          cargo tarpaulin --engine llvm --no-dead-code --no-fail-fast --all-features --workspace --timeout 120 -o xml --output-dir ./cov-reports --skip-clean
+          cargo tarpaulin --engine llvm --no-dead-code --no-fail-fast --all-features --workspace --timeout 120 --out Lcov --output-dir ./cov-reports --skip-clean
 
       - name: Upload coverage artifact
         uses: actions/upload-artifact@v4
@@ -101,7 +101,6 @@ jobs:
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          directory: ./cov-reports
           fail_ci_if_error: true
-          files: '*.xml'
+          files: ./cov-reports/lcov.info
           verbose: true
