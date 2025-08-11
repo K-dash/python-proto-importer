@@ -28,7 +28,7 @@ jobs:
     environment: release # Optional: for enhanced security
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install Rust (stable)
         uses: dtolnay/rust-toolchain@stable
