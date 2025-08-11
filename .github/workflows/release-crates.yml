@@ -1,0 +1,84 @@
+name: Release crates.io
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+defaults:
+  run:
+    shell: bash
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  publish:
+    name: Publish to crates.io
+    runs-on: ubuntu-latest
+    environment: release # Optional: for enhanced security
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+
+      - name: Verify version consistency
+        run: |
+          TAG_VERSION=${GITHUB_REF_NAME#v}
+          CARGO_VERSION=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].version')
+          echo "Tag version: $TAG_VERSION"
+          echo "Cargo version: $CARGO_VERSION"
+          if [[ "$TAG_VERSION" != "$CARGO_VERSION" ]]; then
+            echo "❌ Version mismatch: tag=$TAG_VERSION, Cargo.toml=$CARGO_VERSION"
+            exit 1
+          fi
+          echo "✅ Version consistency verified: $TAG_VERSION"
+
+      - name: Dry-run publish check
+        run: |
+          echo "🧪 Running dry-run publish check..."
+          cargo publish --dry-run --verbose
+
+      - name: Authenticate with crates.io (OIDC)
+        uses: rust-lang/crates-io-auth-action@v1
+        id: auth
+
+      - name: Publish to crates.io
+        run: |
+          echo "🚀 Publishing to crates.io..."
+          cargo publish --verbose
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
+
+      - name: Verify publication
+        run: |
+          echo "✅ Waiting for publication to be visible..."
+          CRATE_NAME=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].name')
+          TAG_VERSION=${GITHUB_REF_NAME#v}
+
+          # Wait up to 2 minutes for the crate to be available
+          for i in {1..24}; do
+            if curl -s "https://crates.io/api/v1/crates/$CRATE_NAME/$TAG_VERSION" | jq -e '.version' >/dev/null 2>&1; then
+              echo "✅ Successfully published $CRATE_NAME v$TAG_VERSION to crates.io"
+              exit 0
+            fi
+            echo "⏳ Waiting for publication to be visible (attempt $i/24)..."
+            sleep 5
+          done
+
+          echo "⚠️ Publication verification timed out, but this doesn't necessarily mean it failed"
+          echo "Check https://crates.io/crates/$CRATE_NAME manually"
