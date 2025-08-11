@@ -17,6 +17,7 @@ def clean_generated_dirs():
         ROOT / "generated",
         ROOT / "generated_alt",
         ROOT / "src" / "proto_importer_e2e" / "generated",
+        ROOT / "test_package" / "generated",
     ]
     for dir_path in dirs_to_clean:
         if dir_path.exists():
@@ -155,6 +156,13 @@ def verify_relative_import_rewrite(gen_path: Path):
     }),
     ("config_uv_python_exe", {
         "out": "generated/uv_test",
+        "has_mypy": False,
+        "has_mypy_grpc": False,
+        "has_init": True,
+        "has_pyright_header": False,
+    }),
+    ("config_package_nested", {
+        "out": "test_package/generated",
         "has_mypy": False,
         "has_mypy_grpc": False,
         "has_init": True,

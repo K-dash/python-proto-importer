@@ -261,6 +261,28 @@ mod commands {
 
             let test_script = create_import_test_script(&package_name, &modules);
 
+            // In debug mode, save the test script to a temporary file for inspection
+            if tracing::enabled!(tracing::Level::DEBUG)
+                && let Ok(temp_dir) = std::env::temp_dir().canonicalize()
+            {
+                let script_path = temp_dir.join(format!(
+                    "python_proto_importer_test_{}.py",
+                    std::process::id()
+                ));
+                if let Err(e) = std::fs::write(&script_path, &test_script) {
+                    tracing::debug!(
+                        "failed to write debug script to {}: {}",
+                        script_path.display(),
+                        e
+                    );
+                } else {
+                    tracing::debug!(
+                        "comprehensive test script saved to: {}",
+                        script_path.display()
+                    );
+                }
+            }
+
             let mut cmd = std::process::Command::new(&cfg.python_exe);
             if cfg.python_exe == "uv" {
                 cmd.arg("run").arg("python").arg("-c").arg(&test_script);
@@ -306,14 +328,67 @@ mod commands {
                 let failed_modules =
                     run_individual_fallback_tests(cfg, &parent_path, &package_name, &modules)?;
                 if !failed_modules.is_empty() {
-                    for (m, error) in &failed_modules {
-                        tracing::error!(module=%m, "import failed: {}", error);
+                    // Try legacy package structure determination as a fallback
+                    tracing::warn!("retrying with legacy package structure determination...");
+                    let (legacy_parent_path, legacy_package_name) =
+                        determine_package_structure_legacy(&out_abs)?;
+
+                    if legacy_parent_path != parent_path || legacy_package_name != package_name {
+                        tracing::debug!(
+                            "legacy fallback: parent_path={}, package_name={}",
+                            legacy_parent_path.display(),
+                            legacy_package_name
+                        );
+                        let legacy_failed_modules = run_individual_fallback_tests(
+                            cfg,
+                            &legacy_parent_path,
+                            &legacy_package_name,
+                            &modules,
+                        )?;
+
+                        if legacy_failed_modules.is_empty() {
+                            tracing::info!(
+                                "import dry-run passed with legacy package structure ({} modules)",
+                                modules.len()
+                            );
+                        } else if legacy_failed_modules.len() < failed_modules.len() {
+                            tracing::warn!(
+                                "legacy fallback reduced failures from {} to {} modules",
+                                failed_modules.len(),
+                                legacy_failed_modules.len()
+                            );
+                            for (m, error) in &legacy_failed_modules {
+                                tracing::error!(module=%m, "import failed (legacy fallback): {}", error);
+                            }
+                            anyhow::bail!(
+                                "import dry-run failed for {} modules (out of {}) even with legacy fallback. Use -v for more details.",
+                                legacy_failed_modules.len(),
+                                modules.len()
+                            );
+                        } else {
+                            tracing::warn!(
+                                "legacy fallback did not improve results, showing original errors"
+                            );
+                            for (m, error) in &failed_modules {
+                                tracing::error!(module=%m, "import failed: {}", error);
+                            }
+                            anyhow::bail!(
+                                "import dry-run failed for {} modules (out of {}). Use -v for more details.",
+                                failed_modules.len(),
+                                modules.len()
+                            );
+                        }
+                    } else {
+                        tracing::debug!("legacy fallback would use same configuration, skipping");
+                        for (m, error) in &failed_modules {
+                            tracing::error!(module=%m, "import failed: {}", error);
+                        }
+                        anyhow::bail!(
+                            "import dry-run failed for {} modules (out of {}). Use -v for more details.",
+                            failed_modules.len(),
+                            modules.len()
+                        );
                     }
-                    anyhow::bail!(
-                        "import dry-run failed for {} modules (out of {}). Use -v for more details.",
-                        failed_modules.len(),
-                        modules.len()
-                    );
                 }
                 tracing::warn!(
                     "comprehensive test failed but individual tests passed - this may indicate a package structure issue"
@@ -334,17 +409,114 @@ mod commands {
         Ok(())
     }
 
-    fn determine_package_structure(out_abs: &Path) -> Result<(PathBuf, String)> {
+    pub(crate) fn determine_package_structure_legacy(out_abs: &Path) -> Result<(PathBuf, String)> {
+        // Legacy behavior: simply use parent as PYTHONPATH and out_name as package_name
         let out_name = out_abs
             .file_name()
             .and_then(|n| n.to_str())
             .unwrap_or("generated");
+
+        tracing::debug!(
+            "determine_package_structure_legacy: using simple structure: PYTHONPATH={}, package_name={}",
+            out_abs
+                .parent()
+                .map(|p| p.display().to_string())
+                .unwrap_or_else(|| "<none>".to_string()),
+            out_name
+        );
 
         let parent = out_abs.parent();
         if let Some(parent_dir) = parent.filter(|p| p.exists()) {
             return Ok((parent_dir.to_path_buf(), out_name.to_string()));
         }
 
+        Ok((out_abs.to_path_buf(), String::new()))
+    }
+
+    pub(crate) fn determine_package_structure(out_abs: &Path) -> Result<(PathBuf, String)> {
+        // Prefer PYTHONPATH to point at the directory which contains the "package root".
+        // If the parent of `out_abs` is a package (has __init__.py), use its parent as
+        // PYTHONPATH and set package_name to "{parent}.{out}". Otherwise use the parent
+        // as PYTHONPATH and package_name to `out`.
+        let out_name = out_abs
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("generated");
+
+        tracing::debug!(
+            "determine_package_structure: analyzing out_abs={}",
+            out_abs.display()
+        );
+        tracing::debug!("determine_package_structure: out_name={}", out_name);
+
+        if let Some(parent_dir) = out_abs.parent() {
+            tracing::debug!(
+                "determine_package_structure: parent_dir={}",
+                parent_dir.display()
+            );
+            if parent_dir.exists() {
+                let parent_init = parent_dir.join("__init__.py");
+                tracing::debug!(
+                    "determine_package_structure: checking for parent_init={}",
+                    parent_init.display()
+                );
+                if parent_init.exists() {
+                    tracing::debug!(
+                        "determine_package_structure: parent is a package (has __init__.py)"
+                    );
+                    if let Some(grand) = parent_dir.parent() {
+                        tracing::debug!(
+                            "determine_package_structure: grandparent_dir={}",
+                            grand.display()
+                        );
+                        if grand.exists() {
+                            let parent_name = parent_dir
+                                .file_name()
+                                .and_then(|n| n.to_str())
+                                .unwrap_or("");
+                            let pkg = if parent_name.is_empty() {
+                                out_name.to_string()
+                            } else {
+                                format!("{}.{}", parent_name, out_name)
+                            };
+                            tracing::debug!(
+                                "determine_package_structure: using nested package structure: PYTHONPATH={}, package_name={}",
+                                grand.display(),
+                                pkg
+                            );
+                            return Ok((grand.to_path_buf(), pkg));
+                        } else {
+                            tracing::debug!(
+                                "determine_package_structure: grandparent does not exist, falling back to standard structure"
+                            );
+                        }
+                    } else {
+                        tracing::debug!(
+                            "determine_package_structure: no grandparent, falling back to standard structure"
+                        );
+                    }
+                } else {
+                    tracing::debug!(
+                        "determine_package_structure: parent is not a package (no __init__.py)"
+                    );
+                }
+                tracing::debug!(
+                    "determine_package_structure: using standard structure: PYTHONPATH={}, package_name={}",
+                    parent_dir.display(),
+                    out_name
+                );
+                return Ok((parent_dir.to_path_buf(), out_name.to_string()));
+            } else {
+                tracing::debug!("determine_package_structure: parent directory does not exist");
+            }
+        } else {
+            tracing::debug!("determine_package_structure: no parent directory");
+        }
+
+        tracing::debug!(
+            "determine_package_structure: fallback to out_abs as PYTHONPATH: PYTHONPATH={}, package_name=empty",
+            out_abs.display()
+        );
         Ok((out_abs.to_path_buf(), String::new()))
     }
 
@@ -415,6 +587,12 @@ except Exception as e:
             "running individual fallback tests for {} modules",
             modules.len()
         );
+        tracing::debug!(
+            "environment: PYTHONPATH={}, package_name={}, python_exe={}",
+            parent_path.display(),
+            package_name,
+            cfg.python_exe
+        );
 
         for (idx, module) in modules.iter().enumerate() {
             let full_module = if package_name.is_empty() {
@@ -459,6 +637,26 @@ except Exception as e:
                 module, full_module
             );
 
+            // In debug mode, save individual test scripts to temporary files for inspection
+            if tracing::enabled!(tracing::Level::TRACE)
+                && let Ok(temp_dir) = std::env::temp_dir().canonicalize()
+            {
+                let script_path = temp_dir.join(format!(
+                    "python_proto_importer_individual_{}_{}.py",
+                    std::process::id(),
+                    idx
+                ));
+                if let Err(e) = std::fs::write(&script_path, &test_script) {
+                    tracing::trace!(
+                        "failed to write debug script to {}: {}",
+                        script_path.display(),
+                        e
+                    );
+                } else {
+                    tracing::trace!("individual test script saved to: {}", script_path.display());
+                }
+            }
+
             let mut cmd = std::process::Command::new(&cfg.python_exe);
             if cfg.python_exe == "uv" {
                 cmd.arg("run").arg("python").arg("-c").arg(&test_script);
@@ -478,8 +676,22 @@ except Exception as e:
 
             if !output.status.success() {
                 let stderr_output = String::from_utf8_lossy(&output.stderr);
+                let stdout_output = String::from_utf8_lossy(&output.stdout);
                 let mut error_msg = String::new();
 
+                // Debug output of full stderr and stdout in verbose mode
+                if tracing::enabled!(tracing::Level::DEBUG) {
+                    tracing::debug!("individual test failed for module {}", module);
+                    tracing::debug!("exit code: {:?}", output.status.code());
+                    if !stderr_output.trim().is_empty() {
+                        tracing::debug!("stderr:\n{}", stderr_output);
+                    }
+                    if !stdout_output.trim().is_empty() {
+                        tracing::debug!("stdout:\n{}", stdout_output);
+                    }
+                }
+
+                // Parse stderr for known error patterns
                 for line in stderr_output.lines() {
                     if line.starts_with("RELATIVE_IMPORT_ERROR:") {
                         error_msg = format!(
@@ -512,13 +724,64 @@ except Exception as e:
                         );
                         break;
                     }
+                    // Also check for common Python error patterns in stderr
+                    else if line.contains("ImportError:") {
+                        error_msg = format!("ImportError found in stderr: {}", line.trim());
+                        break;
+                    } else if line.contains("ModuleNotFoundError:") {
+                        error_msg = format!("ModuleNotFoundError found in stderr: {}", line.trim());
+                        break;
+                    } else if line.contains("SyntaxError:") {
+                        error_msg = format!("SyntaxError found in stderr: {}", line.trim());
+                        break;
+                    } else if line.contains("NameError:") {
+                        error_msg = format!("NameError found in stderr: {}", line.trim());
+                        break;
+                    }
                 }
 
+                // If no error pattern found in stderr, check stdout
                 if error_msg.is_empty() {
-                    error_msg = format!(
-                        "Unknown error (exit code: {})",
-                        output.status.code().unwrap_or(-1)
-                    );
+                    for line in stdout_output.lines() {
+                        if line.contains("ImportError:") {
+                            error_msg = format!("ImportError found in stdout: {}", line.trim());
+                            break;
+                        } else if line.contains("ModuleNotFoundError:") {
+                            error_msg =
+                                format!("ModuleNotFoundError found in stdout: {}", line.trim());
+                            break;
+                        } else if line.contains("SyntaxError:") {
+                            error_msg = format!("SyntaxError found in stdout: {}", line.trim());
+                            break;
+                        } else if line.contains("Traceback (most recent call last):") {
+                            error_msg =
+                                format!("Python traceback found in stdout: {}", line.trim());
+                            break;
+                        }
+                    }
+                }
+
+                // If still no specific error found, provide more detailed information
+                if error_msg.is_empty() {
+                    let detailed_info =
+                        if !stderr_output.trim().is_empty() || !stdout_output.trim().is_empty() {
+                            let stderr_preview =
+                                stderr_output.lines().take(2).collect::<Vec<_>>().join("; ");
+                            let stdout_preview =
+                                stdout_output.lines().take(2).collect::<Vec<_>>().join("; ");
+                            format!(
+                                "Unknown error (exit code: {}) - stderr: '{}' - stdout: '{}'",
+                                output.status.code().unwrap_or(-1),
+                                stderr_preview.trim(),
+                                stdout_preview.trim()
+                            )
+                        } else {
+                            format!(
+                                "Unknown error (exit code: {}) - no output",
+                                output.status.code().unwrap_or(-1)
+                            )
+                        };
+                    error_msg = detailed_info;
                 }
 
                 failed.push((module.clone(), error_msg));
@@ -794,6 +1057,89 @@ mod doctor {
             bail!(
                 "grpc_tools.protoc not found. Install with 'uv add grpcio-tools' or 'pip install grpcio-tools'"
             );
+        }
+
+        // Check package structure if pyproject.toml is found
+        if let Ok(cfg) = AppConfig::load(Some(Path::new("pyproject.toml"))) {
+            println!("\n== Package structure analysis ==");
+
+            let out_abs = cfg.out.canonicalize().unwrap_or_else(|_| cfg.out.clone());
+            println!("Output directory: {}", out_abs.display());
+
+            if !out_abs.exists() {
+                println!(
+                    "  ❌ Output directory does not exist. Run 'build' first to generate files."
+                );
+            } else {
+                println!("  ✅ Output directory exists");
+
+                // Analyze current package structure determination
+                let (parent_path, package_name) =
+                    super::commands::determine_package_structure(&out_abs).unwrap_or_else(|e| {
+                        println!("  ❌ Failed to determine package structure: {}", e);
+                        (std::path::PathBuf::new(), String::new())
+                    });
+
+                let (legacy_parent_path, legacy_package_name) =
+                    super::commands::determine_package_structure_legacy(&out_abs).unwrap_or_else(
+                        |e| {
+                            println!("  ❌ Failed to determine legacy package structure: {}", e);
+                            (std::path::PathBuf::new(), String::new())
+                        },
+                    );
+
+                println!("  Current implementation:");
+                println!("    PYTHONPATH: {}", parent_path.display());
+                println!(
+                    "    Package name: {}",
+                    if package_name.is_empty() {
+                        "<empty>"
+                    } else {
+                        &package_name
+                    }
+                );
+
+                if parent_path != legacy_parent_path || package_name != legacy_package_name {
+                    println!("  Legacy implementation (fallback):");
+                    println!("    PYTHONPATH: {}", legacy_parent_path.display());
+                    println!(
+                        "    Package name: {}",
+                        if legacy_package_name.is_empty() {
+                            "<empty>"
+                        } else {
+                            &legacy_package_name
+                        }
+                    );
+                }
+
+                // Check parent directory package status
+                if let Some(parent_dir) = out_abs.parent() {
+                    let parent_init = parent_dir.join("__init__.py");
+                    if parent_init.exists() {
+                        println!("  ✅ Parent directory is a Python package (has __init__.py)");
+                        if let Some(parent_name) = parent_dir.file_name().and_then(|n| n.to_str()) {
+                            println!("    Package name: {}", parent_name);
+                        }
+                        if let Some(grandparent) = parent_dir.parent() {
+                            println!("    Recommended PYTHONPATH: {}", grandparent.display());
+                        }
+                    } else {
+                        println!("  ℹ️  Parent directory is not a Python package (no __init__.py)");
+                        println!("    This is fine for simple structures");
+                    }
+                }
+
+                // Count generated files
+                if let Ok(entries) = std::fs::read_dir(&out_abs) {
+                    let py_files: Vec<_> = entries
+                        .filter_map(Result::ok)
+                        .filter(|entry| {
+                            entry.path().extension().and_then(|ext| ext.to_str()) == Some("py")
+                        })
+                        .collect();
+                    println!("  Generated files: {} Python files found", py_files.len());
+                }
+            }
         }
 
         Ok(())
