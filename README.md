@@ -5,247 +5,187 @@
 [![CI](https://github.com/K-dash/python-proto-importer/actions/workflows/ci.yml/badge.svg)](https://github.com/K-dash/python-proto-importer/actions)
 [![codecov](https://codecov.io/gh/K-dash/python-proto-importer/graph/badge.svg?token=iqNMDrK6Er)](https://codecov.io/gh/K-dash/python-proto-importer)
 
-Rust-based CLI to streamline Python gRPC/Protobuf workflows: generate code, stabilize imports, and run type checks in a single command. Ships as a PyPI package (via maturin) and as a Rust crate.
+A Rust-powered CLI that brings production-grade reliability to Python gRPC/Protobuf code generation. Generate, validate, and maintain protobuf-based Python code with confidence.
 
-### Why this project (Motivation)
+**日本語版:** [日本語ドキュメント](doc/README.ja.md)
 
-- **Fragile imports from stock protoc output**: vanilla `grpcio-tools`/`protoc` emit absolute imports (e.g. `import foo.bar_pb2`) that break when you move the generated tree, split packages, or embed code under a different root. This tool rewrites them into stable **relative imports** inside the generated package.
-- **Package structure friction**: projects often forget to add `__init__.py` or need namespace packages. We can auto-create `__init__.py` (opt-in/out) to make the tree importable and CI-friendly.
-- **Type-checking pain**: mixing generated `.py` and `.pyi` frequently leads to noisy type warnings. We optionally integrate with `mypy-protobuf` / `mypy-grpc`, and recommend `.pyi`-first verification via Pyright.
-- **Non-reproducible, multi-step scripts**: teams maintain ad‑hoc scripts for generation, postprocessing, and verification. This CLI runs the full pipeline in one command and stores configuration in `pyproject.toml`.
-- **Silent breakages**: generated trees “import” locally but fail in CI or different PYTHONPATHs. A built-in **import dry-run** validates the entire package layout deterministically.
+## Why python-proto-importer?
 
-### How it differs from existing tools
+### Solve the Absolute Import Problem
 
-- **Postprocess with awareness of your output tree**: relative-import rewriting targets only `_pb2[_grpc]` modules that actually exist beneath your configured `out`, leaving third‑party modules (e.g. `google.protobuf`) untouched by default.
-- **Package hygiene by default**: opt-in `__init__.py` generation and path‑robust computation (uses canonical paths) reduce environment‑dependent surprises.
-- **Verification built-in**: import dry‑run for all generated modules, plus easy hooks to run `mypy`/`pyright` as part of the same command.
-- **Single source of truth in `pyproject.toml`**: keeps your team’s proto generation policy declarative and reviewable.
-- **Fast, portable binary**: implemented in Rust with a small runtime footprint; distributed both on PyPI (wheel) and crates.io.
+**The Core Problem:** Standard `protoc` generates Python files with absolute imports (e.g., `import foo.bar_pb2`), which breaks when you move generated code to different locations in your project. This forces you to place generated files in specific locations, limiting your project structure flexibility.
 
-- **Backends**: `protoc` (v0.1), `buf generate` (planned v0.2)
-- **Postprocess**: convert internal imports to relative; generate `__init__.py`
-- **Typing**: optional `mypy-protobuf` / `mypy-grpc` emission
-- **Verification**: import dry-run, optional mypy/pyright
+**Our Solution:** Automatically converts all imports to relative imports based on your `pyproject.toml` configuration. This means you can place generated code **anywhere** in your project structure and it will work correctly. While other tools exist to address this problem, our integrated approach ensures it works seamlessly with the rest of the validation pipeline.
 
-For Japanese documentation, see: [docs/日本語 README](doc/README.ja.md)
+### Built-in Quality Assurance
 
-## Table of Contents
+Unlike standard protoc workflows, this tool **validates generated code before it reaches your project**. When mypy-protobuf or complex proto definitions produce incorrect stubs, you'll know immediately—not when your CI fails.
 
-- [Quick Start](#quick-start)
-- [Commands](#commands)
-- [Configuration](#configuration)
-  - [Core Configuration](#core-configuration)
-  - [Postprocess Configuration](#postprocess-configuration)
-  - [Verification Configuration](#verification-configuration)
-- [Configuration Examples](#configuration-examples)
-- [Advanced Usage](#advanced-usage)
-- [Limitations](#limitations)
-- [Contributing](#contributing)
-- [License](#license)
+**The Problem:** Standard protoc/mypy-protobuf can generate broken `.pyi` files that crash your type checker with cryptic errors.
+
+**Our Solution:** Every generation run includes automatic type validation, ensuring the generated code is correct *before* you use it.
+
+### Clear Error Boundaries
+
+**Generation-time errors vs. Usage-time errors**—know the difference instantly.
+
+- ✅ Tool succeeds = Generated code is valid
+- ❌ Tool fails = Problem in generation process (not your code!)
+- 📊 Your type checker fails later = Issue in how you're using the generated code
+
+### Optimal Validation Environment
+
+Your project's mypy/pyright settings might not be ideal for validating generated protobuf code. This tool maintains its own optimized type-checking configuration specifically tuned for protobuf validation, ensuring consistent quality regardless of your project settings.
+
+### Blazing Fast Performance
+
+Built with **Rust** for maximum performance. File operations, import rewriting, and validation run at native speed, making it ideal for large codebases and CI/CD pipelines where every second counts.
 
 ## Quick Start
 
+### Installation
+
 ```bash
+# Via pip (recommended)
 pip install python-proto-importer
-# or
+
+# Via cargo
 cargo install python-proto-importer
 ```
 
-Create a `pyproject.toml` with your configuration:
+### Basic Setup
+
+1. Create a `pyproject.toml` configuration:
 
 ```toml
 [tool.python_proto_importer]
-backend = "protoc"
-python_exe = "python3"
-include = ["proto"]
-inputs = ["proto/**/*.proto"]
-out = "generated/python"
+inputs = ["proto/**/*.proto"]  # Your proto files
+out = "generated"              # Output directory
 ```
 
-Run the build:
+2. Generate Python code:
 
 ```bash
 proto-importer build
 ```
 
+That's it! Your generated code is now validated and ready to use.
+
+## Core Features
+
+### Smart Import Management
+- **Automatic relative imports**: Generated code uses relative imports, making it portable across different project structures
+- **Intelligent rewriting**: Only touches protobuf imports, preserving external dependencies like `google.protobuf`
+
+### Package Structure Control
+- **Automatic `__init__.py` generation**: No more missing init files breaking imports
+- **Namespace package support**: Full PEP 420 compatibility when needed
+
+### Comprehensive Verification
+- **Import validation**: Every generated module is test-imported
+- **Type checking**: Optional mypy/pyright validation with optimal settings
+- **Pre-flight checks**: `proto-importer doctor` diagnoses your environment
+
+### Production-Ready Workflow
+- **Single command**: Generate, postprocess, and validate in one step
+- **Declarative configuration**: All settings in `pyproject.toml`
+- **CI/CD friendly**: Designed for automation
+
 ## Commands
 
+### `proto-importer build`
+Generate Python code from proto files with full validation pipeline.
+
+```bash
+proto-importer build                  # Standard build
+proto-importer build --no-verify      # Skip verification
+proto-importer build --pyproject custom.toml  # Custom config
+```
+
 ### `proto-importer doctor`
+Diagnose your environment and check dependencies.
 
-Environment diagnostics with versions and helpful hints:
-
-- Detects Python runner (uv/python) and shows versions
-- Checks for `grpcio-tools` (required), `mypy-protobuf` / `mypy-grpc` (optional per config)
-- Shows `protoc` / `buf` versions (informational in v0.1)
-- Checks `mypy` / `pyright` CLIs and prints hints if configured but missing
-
-### `proto-importer build [--pyproject PATH]`
-
-Generate Python code from proto files, apply postprocessing, and run verification.
-
-Options:
-
-- `--pyproject PATH`: Path to pyproject.toml (default: `./pyproject.toml`)
-- `--no-verify`: Skip verification after generation
-- `--postprocess-only`: Skip generation, only run postprocessing (experimental)
-
-### `proto-importer check [--pyproject PATH]`
-
-Run verification only (import dry-run and type checks) without generation.
-
-### `proto-importer clean [--pyproject PATH] --yes`
-
-Remove generated output directory. Requires `--yes` confirmation.
-
-## Configuration
-
-All configuration is done through `pyproject.toml` under the `[tool.python_proto_importer]` section.
-
-### Core Configuration
-
-| Option       | Type    | Default              | Description                                                                                                                                                |
-| ------------ | ------- | -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `backend`    | string  | `"protoc"`           | Code generation backend. Currently only `"protoc"` is supported. `"buf"` planned for v0.2.                                                                 |
-| `python_exe` | string  | `"python3"`          | Python executable to use for generation and verification. Can be `"python3"`, `"python"`, `"uv"` (fully tested), or a path like `".venv/bin/python"`.      |
-| `include`    | array   | `["."]`              | Proto import paths (passed as `--proto_path` to protoc). Empty array defaults to `["."]`. See [Include Path Behavior](#include-path-behavior) for details. |
-| `inputs`     | array   | `[]`                 | Glob patterns for proto files to generate. Example: `["proto/**/*.proto"]`. Files are filtered by `include` paths.                                         |
-| `out`        | string  | `"generated/python"` | Output directory for generated Python files.                                                                                                               |
-| `mypy`       | boolean | `false`              | Generate mypy type stubs (`.pyi` files) using `mypy-protobuf`.                                                                                             |
-| `mypy_grpc`  | boolean | `false`              | Generate gRPC mypy stubs (`_grpc.pyi` files) using `mypy-grpc`.                                                                                            |
-
-#### Include Path Behavior
-
-The `include` option controls proto import paths and has important interactions with `inputs`:
-
-1. **Default Behavior**: If `include` is empty or not specified, it defaults to `["."]` (current directory).
-
-2. **Path Resolution**: Each path in `include` is passed to protoc as `--proto_path`. Proto files can only import other protos within these paths.
-
-3. **Input Filtering**: Files matched by `inputs` globs are automatically filtered to only include those under `include` paths. This prevents protoc errors when globs match files outside the include paths.
-
-4. **Output Structure**: Generated files maintain the directory structure relative to the `include` path. For example:
-
-   - With `include = ["proto"]` and a file at `proto/service/api.proto`
-   - Output will be at `{out}/service/api_pb2.py`
-
-5. **Multiple Include Paths**: When specifying multiple paths like `include = ["proto/common", "proto/services"]`, be aware that files with the same relative path may cause conflicts.
-
-**Examples:**
-
-```toml
-# Simple case - all protos under proto/ directory
-include = ["proto"]
-inputs = ["proto/**/*.proto"]
-
-# Multiple include paths - useful for separate proto roots
-include = ["common/proto", "services/proto"]
-inputs = ["**/*.proto"]
-
-# Selective generation - only specific services
-include = ["."]  # Use current directory to avoid path conflicts
-inputs = ["proto/payment/**/*.proto", "proto/user/**/*.proto"]
-
-# Alternative proto structure
-include = ["api/definitions"]
-inputs = ["api/definitions/**/*.proto"]
+```bash
+proto-importer doctor
 ```
 
-### Postprocess Configuration
+Output shows:
+- Python environment (python/uv)
+- Required dependencies (grpcio-tools)
+- Optional tools (mypy-protobuf, mypy, pyright)
+- Helpful hints for missing components
 
-The `postprocess` table controls post-generation transformations:
+### `proto-importer check`
+Run verification only (no generation).
 
-| Option             | Type    | Default   | Description                                                                                     |
-| ------------------ | ------- | --------- | ----------------------------------------------------------------------------------------------- |
-| `relative_imports` | boolean | `true`    | Convert absolute imports to relative imports within generated files.                            |
-| `fix_pyi`          | boolean | `true`    | Fix type annotations in `.pyi` files (currently reserved for future use).                       |
-| `create_package`   | boolean | `true`    | Create `__init__.py` files in all directories. Set to `false` for namespace packages (PEP 420). |
-| `exclude_google`   | boolean | `true`    | Exclude `google.protobuf` imports from relative import conversion.                              |
-| `pyright_header`   | boolean | `false`   | Add Pyright suppression header to generated `_pb2.py` and `_pb2_grpc.py` files.                 |
-| `module_suffixes`  | array   | See below | File suffixes to process during postprocessing.                                                 |
-
-Default `module_suffixes`:
-
-```toml
-module_suffixes = ["_pb2.py", "_pb2.pyi", "_pb2_grpc.py", "_pb2_grpc.pyi"]
+```bash
+proto-importer check
 ```
 
-#### Import Rewrite Coverage and Limitations
+### `proto-importer clean`
+Remove generated output directory.
 
-- Covered patterns:
-  - `import pkg.module_pb2` / `import pkg.module_pb2 as alias`
-  - `import pkg.mod1_pb2, pkg.sub.mod2_pb2 as alias` (split into multiple `from` lines)
-  - `from pkg import module_pb2` / `from pkg import module_pb2 as alias`
-  - `from pkg import mod1_pb2, mod2_pb2 as alias`
-  - `from pkg import (\n    mod1_pb2,\n    mod2_pb2 as alias,\n  )`
-- Exclusions/known behaviors:
-  - `google.protobuf.*` is excluded when `exclude_google = true` (default).
-  - Parentheses-based line continuation is supported for `from ... import (...)`; backslash continuations (e.g. `\\`) are not currently handled.
-  - Only modules matching `_pb2` / `_pb2_grpc` are candidates; other imports are left unchanged.
-  - Mixed lists are split: rewritten items go to a relative `from` line; non-target items remain as their original import.
-  - Rewrites only apply if the target module file exists under the configured `out` tree.
+```bash
+proto-importer clean --yes
+```
 
-#### Path Resolution Robustness
+## ⚙️ Configuration
 
-- The tool computes relative import prefixes using canonicalized paths (`realpath`),
-  which reduces inconsistencies from relative segments (e.g., `./`, `../`) and
-  symlinks. If canonicalization fails (non-existent paths, permission), it falls
-  back to a best-effort relative computation.
-- Practical tip: ensure your generated tree exists before postprocessing so the
-  canonicalization can establish a stable common prefix.
+All configuration lives in `pyproject.toml` under `[tool.python_proto_importer]`.
 
-### Verification Configuration
+### Essential Options
 
-The `[tool.python_proto_importer.verify]` section configures optional verification commands:
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `inputs` | array | `[]` | Glob patterns for proto files to compile |
+| `out` | string | `"generated/python"` | Output directory for generated files |
+| `include` | array | `["."]` | Proto import paths (protoc's `--proto_path`) |
+| `python_exe` | string | `"python3"` | Python executable (`"python3"`, `"python"`, `"uv"`) |
 
-| Option        | Type  | Default | Description                                                                     |
-| ------------- | ----- | ------- | ------------------------------------------------------------------------------- |
-| `mypy_cmd`    | array | `null`  | Command to run mypy type checking. Example: `["mypy", "--strict", "generated"]` |
-| `pyright_cmd` | array | `null`  | Command to run pyright type checking. Example: `["pyright", "generated"]`       |
+### Type Stub Generation
 
-**Important Notes:**
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `mypy` | boolean | `false` | Generate `.pyi` stubs via mypy-protobuf |
+| `mypy_grpc` | boolean | `false` | Generate gRPC stubs (`_grpc.pyi`) |
 
-1. **Import Dry-run**: Always performed automatically. The tool attempts to import all generated Python modules to ensure they're valid.
+### Post-processing Options
 
-2. **Type Checking**: Only runs if configured. The tools (mypy/pyright) must be available in your environment.
+Configure under `[tool.python_proto_importer.postprocess]`:
 
-3. **Command Arrays**: Commands are specified as arrays where the first element is the executable and remaining elements are arguments.
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `relative_imports` | boolean | `true` | Convert to relative imports |
+| `create_package` | boolean | `true` | Create `__init__.py` files |
+| `exclude_google` | boolean | `true` | Don't rewrite `google.protobuf` imports |
+| `pyright_header` | boolean | `false` | Add Pyright suppression headers |
 
-**Examples:**
+### Verification Options
+
+Configure under `[tool.python_proto_importer.verify]`:
 
 ```toml
 [tool.python_proto_importer.verify]
-# Using uv to run type checkers
-mypy_cmd = ["uv", "run", "mypy", "--strict", "generated/python"]
-pyright_cmd = ["uv", "run", "pyright", "generated/python"]
-
-# Direct execution
-mypy_cmd = ["mypy", "--config-file", "mypy.ini", "generated"]
-
-# Check only .pyi files with pyright
+mypy_cmd = ["mypy", "--strict", "generated"]
 pyright_cmd = ["pyright", "generated/**/*.pyi"]
-
-# Exclude generated gRPC files from mypy strict checking
-mypy_cmd = ["mypy", "--strict", "--exclude", ".*_grpc\\.py$", "generated"]
 ```
 
 ## Configuration Examples
 
-### Minimal Configuration
+### Minimal Setup
 
 ```toml
 [tool.python_proto_importer]
-backend = "protoc"
 inputs = ["proto/**/*.proto"]
 out = "generated"
 ```
 
-### Full-Featured Configuration
+### Production Setup with Type Checking
 
 ```toml
 [tool.python_proto_importer]
 backend = "protoc"
-python_exe = ".venv/bin/python"
+python_exe = "uv"  # or ".venv/bin/python"
 include = ["proto"]
 inputs = ["proto/**/*.proto"]
 out = "src/generated"
@@ -254,210 +194,215 @@ mypy_grpc = true
 
 [tool.python_proto_importer.postprocess]
 relative_imports = true
-fix_pyi = true
 create_package = true
 exclude_google = true
-pyright_header = true
 
 [tool.python_proto_importer.verify]
-mypy_cmd = ["uv", "run", "mypy", "--strict", "--exclude", ".*_grpc\\.py$", "src/generated"]
+# Focus on .pyi files to avoid noise from generated .py files
 pyright_cmd = ["uv", "run", "pyright", "src/generated/**/*.pyi"]
+mypy_cmd = ["uv", "run", "mypy", "--strict", "src/generated"]
 ```
 
-Note: For pyright, we recommend focusing on `.pyi` stubs (as shown) to avoid warnings from generated `.py` that intentionally reference experimental or dynamically provided attributes.
-
-### Pyi-only Verification Example
+### Namespace Packages (PEP 420)
 
 ```toml
 [tool.python_proto_importer]
-backend = "protoc"
-include = ["proto"]
-inputs = ["proto/**/*.proto"]
-out = "generated/python"
-mypy = true
-
-[tool.python_proto_importer.verify]
-# Validate only the generated stubs with pyright
-pyright_cmd = ["uv", "run", "pyright", "generated/python/**/*.pyi"]
-```
-
-### Namespace Package Configuration (PEP 420)
-
-```toml
-[tool.python_proto_importer]
-backend = "protoc"
-include = ["proto"]
 inputs = ["proto/**/*.proto"]
 out = "generated"
 
 [tool.python_proto_importer.postprocess]
-create_package = false  # Don't create __init__.py files
+create_package = false  # No __init__.py files
 ```
 
-### Selective Service Generation
+## Understanding `include` vs `inputs`
+
+This is crucial for correct configuration:
+
+### `include` - Search Paths
+Where protoc looks for `.proto` files and their dependencies.
+
+### `inputs` - Files to Compile
+Which `.proto` files to actually compile (glob patterns).
+
+### Example Structure
+
+```
+project/
+├── pyproject.toml           # Configuration file (the reference point)
+├── api/
+│   └── service.proto        # Your service (compile this)
+├── third_party/
+│   └── google/
+│       └── api/
+│           └── annotations.proto  # Dependency (don't compile)
+└── generated/               # Output here
+```
+
+### Correct Configuration
 
 ```toml
 [tool.python_proto_importer]
-backend = "protoc"
-include = ["."]
-# Only generate specific services
-inputs = [
-    "proto/authentication/**/*.proto",
-    "proto/user_management/**/*.proto"
-]
-out = "services/generated"
+include = [".", "third_party"]  # Can see all protos
+inputs = ["api/**/*.proto"]      # Only compile your protos
+out = "generated"
 ```
 
-### Custom Directory Structure
-
-```toml
-[tool.python_proto_importer]
-backend = "protoc"
-# For non-standard proto locations
-include = ["api/v1/definitions"]
-inputs = ["api/v1/definitions/**/*.proto"]
-out = "build/python/api"
-```
+**Key Point:** Dependencies need to be in `include` (so protoc can find them) but NOT in `inputs` (you don't want to regenerate them).
 
 ## Advanced Usage
 
 ### Using with uv
 
-[uv](https://github.com/astral-sh/uv) is a fast Python package manager that can replace pip and virtualenv:
+[uv](https://github.com/astral-sh/uv) is a fast Python package manager:
 
 ```toml
 [tool.python_proto_importer]
-python_exe = "uv"  # or ".venv/bin/python" if using uv venv
-# ... rest of config
+python_exe = "uv"
 
 [tool.python_proto_importer.verify]
 mypy_cmd = ["uv", "run", "mypy", "--strict", "generated"]
+pyright_cmd = ["uv", "run", "pyright", "generated"]
 ```
 
 ### CI/CD Integration
 
-```yaml
-# GitHub Actions example
-- name: Install dependencies
-  run: |
-    pip install python-proto-importer
-    pip install grpcio-tools mypy-protobuf
+#### GitHub Actions
 
-- name: Generate Python code from protos
+```yaml
+- name: Setup
+  run: |
+    pip install python-proto-importer grpcio-tools mypy-protobuf
+
+- name: Generate Proto
   run: proto-importer build
 
-- name: Run tests
+- name: Run Tests
   run: pytest tests/
 ```
 
-### Understanding `include` vs `inputs`
+#### Pre-commit Hook
 
-One of the most important concepts to understand when configuring python-proto-importer is the difference between `include` and `inputs`:
-
-#### 🗂️ `include` - "Where to Look" (Search Paths)
-
-Specifies **where** the protobuf compiler (protoc) should **search** for `.proto` files.
-
-#### 📄 `inputs` - "What to Compile" (Target Files)
-
-Specifies **which** `.proto` files you want to **compile** using glob patterns.
-
-#### 🏗️ Example Project Structure
-
-```
-my-project/
-├── api/
-│   ├── user/
-│   │   └── user.proto          # Want to compile this
-│   └── order/
-│       └── order.proto         # Want to compile this
-├── third_party/
-│   └── google/
-│       └── protobuf/
-│           └── timestamp.proto # Referenced as dependency
-└── generated/                  # Output directory
+```yaml
+repos:
+  - repo: local
+    hooks:
+      - id: proto-build
+        name: Build Proto Files
+        entry: proto-importer build
+        language: system
+        files: \.proto$
 ```
 
-#### ⚙️ Configuration Example
+## Troubleshooting
+
+### Import Errors After Generation
+
+1. Check package structure:
+   ```bash
+   proto-importer check
+   ```
+
+2. Verify `include` paths cover all dependencies
+
+3. Ensure `PYTHONPATH` includes the parent of your output directory
+
+### Type Checker Warnings
+
+For generated `.py` files with dynamic attributes, focus type checking on `.pyi` files:
 
 ```toml
-[tool.python_proto_importer]
-include = ["api", "third_party"]           # Search paths
-inputs = ["api/**/*.proto"]                # Files to compile
-out = "generated"
+[tool.python_proto_importer.verify]
+pyright_cmd = ["pyright", "generated/**/*.pyi"]  # Only check stubs
 ```
 
-#### 🔍 How It Works
+### "Shadowing" Errors
 
-1. **`inputs`**: `api/**/*.proto` → finds `user.proto` and `order.proto`
-2. **`include`**: Sets `api` and `third_party` as search paths
-3. **Compilation**:
-   - When compiling `user.proto`, if it contains `import "google/protobuf/timestamp.proto"`
-   - The compiler can automatically find `third_party/google/protobuf/timestamp.proto`
+When using multiple `include` paths with same-named files:
+- Use more specific `inputs` patterns
+- Restructure proto files to avoid naming conflicts
 
-#### 🚫 Common Mistakes
+## How It Works
 
-**❌ Wrong Pattern:**
+The tool follows a comprehensive pipeline to ensure reliable code generation:
 
-```toml
-# Wrong: Including dependencies in inputs causes them to be generated
-inputs = ["api/**/*.proto", "third_party/**/*.proto"]  # Generates unwanted files
-include = ["api"]                                      # Missing search paths
+```mermaid
+graph TD
+    A["proto-importer build"] --> B["📝 Load pyproject.toml"]
+    B --> C["🔍 Discover .proto files"]
+    C --> D["⚙️ Execute protoc"]
+    D --> E["📦 Generate Python files"]
+    E --> F{{"Post-processing"}}
+    
+    F --> G["📍 Convert absolute → relative imports"]
+    F --> H["📁 Create __init__.py files"]
+    F --> I["🔧 Add type suppressions"]
+    
+    G --> J{{"✅ Verification"}}
+    H --> J
+    I --> J
+    
+    J --> K["🧪 Import dry-run test"]
+    J --> L["🔍 Type checker validation"]
+    
+    K --> M["Success!"]
+    L --> M
+    
+    style A fill:#e1f5fe
+    style M fill:#e8f5e8
+    style F fill:#fff3e0
+    style J fill:#fce4ec
 ```
 
-**✅ Correct Pattern:**
+### Import Transformation Example
 
-```toml
-# Correct: Only compile what you need, but include all search paths
-inputs = ["api/**/*.proto"]                    # Only compile your API files
-include = ["api", "third_party"]               # Include all paths for dependencies
+```mermaid
+graph LR
+    A["Generated Code<br/>absolute imports"] --> B["Transformation"] --> C["Final Code<br/>relative imports"]
+    
+    A1["import api.service_pb2<br/>from api import user_pb2"] --> B1["Import Rewriter"] --> C1["from . import service_pb2<br/>from . import user_pb2"]
+    
+    style A fill:#ffebee
+    style B fill:#e3f2fd
+    style C fill:#e8f5e8
 ```
 
-#### 🎯 Key Takeaway
+### Key Steps:
 
-- **`include`** = Compiler's "eyes" (what it can see)
-- **`inputs`** = Compiler's "hands" (what it grabs and compiles)
+1. **Generation**: Runs `protoc` with your configuration
+2. **Post-processing**: 
+   - Converts absolute imports to relative
+   - Creates `__init__.py` files
+   - Adds type checker suppressions if configured
+3. **Verification**:
+   - Attempts to import every generated module
+   - Runs configured type checkers
+   - Reports clear, actionable errors
 
-Dependencies are **not compiled** (excluded from `inputs`) but **must be searchable** (included in `include`).
+## 🚧 Current Limitations
 
-This approach ensures you **generate only the files you need** while **properly resolving all dependencies**.
-
-### Handling Complex Proto Dependencies
-
-When dealing with complex proto dependencies across multiple directories:
-
-```toml
-[tool.python_proto_importer]
-# Include all necessary proto roots
-include = [
-    ".",
-    "third_party/proto",
-    "vendor/proto"
-]
-# Use specific patterns to avoid conflicts
-inputs = [
-    "src/proto/**/*.proto",
-    "third_party/proto/specific_service/**/*.proto"
-]
-out = "generated"
-```
-
-## Limitations
-
-- **v0.1 limitations**:
-  - Only `protoc` backend is supported. `buf generate` support is planned for v0.2.
-  - Import rewriting targets common `_pb2(_grpc)?.py[i]` patterns; broader coverage is added incrementally with tests.
-  - Import dry-run verifies only generated `.py` modules (excluding `__init__.py`). `.pyi` files are not imported and should be validated via type checkers (e.g., configure `pyright_cmd` to point at `**/*.pyi`).
-  - The `fix_pyi` flag is reserved for future use in v0.1 and currently has no effect.
-- **Known behaviors**:
-  - When using multiple `include` paths with files of the same name, protoc may report "shadowing" errors. Use selective `inputs` patterns to avoid this.
-  - Generated file structure follows protoc conventions: files are placed relative to their `--proto_path`.
-  - Type checkers (mypy/pyright) must be installed separately and available in PATH or the Python environment.
+- **v0.1**: Only `protoc` backend (buf support planned for v0.2)
+- Import rewriting covers common patterns (`_pb2.py`, `_pb2_grpc.py`, `.pyi` files)
+- Import validation only checks `.py` files (`.pyi` validated via type checkers)
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup and guidelines.
+We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup.
 
-## License
+### Quick Development Setup
 
-Apache-2.0. See LICENSE for details.
+```bash
+# Install development dependencies
+cargo install cargo-make
+
+# Run full validation
+makers all  # Runs format, lint, build, test
+
+# Or individually
+makers format
+makers lint
+makers test
+```
+
+## 📜 License
+
+Apache-2.0. See [LICENSE](LICENSE) for details.
