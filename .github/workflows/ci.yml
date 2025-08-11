@@ -25,7 +25,7 @@ jobs:
       CARGO_MAKE_VERSION: "0.37.24"
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install Rust (stable)
         uses: dtolnay/rust-toolchain@stable
@@ -89,7 +89,7 @@ jobs:
       statuses: write
       id-token: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Download coverage artifact
         uses: actions/download-artifact@v5
