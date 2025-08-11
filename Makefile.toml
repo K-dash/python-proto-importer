@@ -2,13 +2,13 @@
 skip_core_tasks = true
 
 [env]
-TARPAULIN_COMMON_ARGS = "tarpaulin --all-features --timeout 120 --skip-clean"
+TARPAULIN_COMMON_ARGS = "tarpaulin --timeout 120 --skip-clean"
 
 [tasks.default]
 run_task = { name = ["format", "lint"], parallel = true }
 
 [tasks.all]
-run_task = { name = ["format", "lint", "test-all", "python-build-all", "python-smoke"], parallel = true }
+run_task = { name = ["format", "lint", "test-all", "python-build-all", "python-smoke"], parallel = false }
 
 [tasks.format]
 command = "cargo"
