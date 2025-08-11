@@ -1,0 +1,11 @@
+# Configuration for testing package_name/generated structure similar to rcmr_common/generated
+# This simulates the user's reported issue where a package contains a generated subdirectory
+[tool.python_proto_importer]
+backend = "protoc"
+python_exe = ".venv/bin/python"
+include = ["."]
+inputs = ["proto/**/*.proto"]
+out = "test_package/generated"
+mypy = false
+mypy_grpc = false
+postprocess = { relative_imports = true, fix_pyi = false, create_package = true, exclude_google = true, pyright_header = false }
