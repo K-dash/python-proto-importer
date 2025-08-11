@@ -61,14 +61,15 @@ jobs:
       - name: Generate code coverage
         run: |
           # Avoid enabling the optional `python` feature to prevent PyO3 linking on CI
-          cargo tarpaulin --verbose --workspace --timeout 120 --out xml
+          cargo tarpaulin --engine llvm --no-dead-code --no-fail-fast --all-features --workspace --timeout 120 -o xml --output-dir ./cov-reports --skip-clean
 
       - name: Upload coverage artifact
         uses: actions/upload-artifact@v4
         with:
           name: coverage-report
-          path: cobertura.xml
+          path: ./cov-reports
           retention-days: 1
+          if-no-files-found: error
 
       - name: Clippy
         run: cargo make clippy-ci --locked
@@ -94,10 +95,13 @@ jobs:
         uses: actions/download-artifact@v5
         with:
           name: coverage-report
+          path: ./cov-reports
 
       - name: Upload to codecov.io
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          directory: ./
+          directory: ./cov-reports
           fail_ci_if_error: true
+          files: '*.xml'
+          verbose: true
