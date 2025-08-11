@@ -8,7 +8,7 @@ TARPAULIN_COMMON_ARGS = "tarpaulin --all-features --timeout 120 --skip-clean"
 run_task = { name = ["format", "lint"], parallel = true }
 
 [tasks.all]
-run_task = { name = ["format", "lint", "test-all"], parallel = true }
+run_task = { name = ["format", "lint", "test-all", "python-build-all", "python-smoke"], parallel = true }
 
 [tasks.format]
 command = "cargo"
