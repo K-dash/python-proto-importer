@@ -1,0 +1,86 @@
+name: GitHub Release
+
+on:
+  workflow_run:
+    workflows: ["Release PyPI", "Release crates.io"]
+    types: [completed]
+
+defaults:
+  run:
+    shell: bash
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  create-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' && startsWith(github.event.workflow_run.head_branch, 'v') }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Extract release information
+        id: release-info
+        run: |
+          TAG_NAME="${{ github.event.workflow_run.head_branch }}"
+          VERSION="${TAG_NAME#v}"
+          echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Release tag: $TAG_NAME"
+          echo "Release version: $VERSION"
+
+      - name: Check if both PyPI and crates.io workflows completed successfully
+        run: |
+          echo "🔍 Verifying both release workflows completed successfully..."
+
+          # Get the list of workflow runs for this tag
+          WORKFLOW_RUNS=$(gh api \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "/repos/${{ github.repository }}/actions/runs" \
+            --jq ".workflow_runs[] | select(.head_branch == \"${{ github.event.workflow_run.head_branch }}\") | {name: .name, conclusion: .conclusion}")
+
+          echo "Workflow runs for tag ${{ github.event.workflow_run.head_branch }}:"
+          echo "$WORKFLOW_RUNS"
+
+          # Check if both workflows exist and succeeded
+          PYPI_SUCCESS=$(echo "$WORKFLOW_RUNS" | jq -r 'select(.name == "Release PyPI") | .conclusion')
+          CRATES_SUCCESS=$(echo "$WORKFLOW_RUNS" | jq -r 'select(.name == "Release crates.io") | .conclusion')
+
+          if [[ "$PYPI_SUCCESS" == "success" && "$CRATES_SUCCESS" == "success" ]]; then
+            echo "✅ Both PyPI and crates.io releases completed successfully"
+          else
+            echo "⏳ Waiting for both releases to complete..."
+            echo "PyPI status: $PYPI_SUCCESS"
+            echo "crates.io status: $CRATES_SUCCESS"
+            exit 1
+          fi
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.release-info.outputs.tag_name }}
+          name: "Release ${{ steps.release-info.outputs.version }}"
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+          make_latest: true
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+      - name: Update release success status
+        run: |
+          echo "🎉 Successfully created GitHub Release for ${{ steps.release-info.outputs.tag_name }}"
+          echo "📦 PyPI: https://pypi.org/project/python-proto-importer/${{ steps.release-info.outputs.version }}/"
+          echo "📦 crates.io: https://crates.io/crates/python-proto-importer/${{ steps.release-info.outputs.version }}"
+          echo "🏷️ GitHub: https://github.com/${{ github.repository }}/releases/tag/${{ steps.release-info.outputs.tag_name }}"
