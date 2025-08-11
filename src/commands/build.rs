@@ -9,7 +9,47 @@ use crate::verification::import_test::verify;
 use anyhow::{Context, Result};
 use std::path::Path;
 
-/// Execute the build command
+/// Execute the build command to generate Python code from proto files.
+///
+/// This is the main entry point for the code generation pipeline. It performs
+/// the complete workflow: loading configuration, generating code, applying
+/// post-processing transformations, and running verification checks.
+///
+/// # Arguments
+///
+/// * `pyproject` - Optional path to the pyproject.toml file. If None, uses "pyproject.toml"
+/// * `no_verify` - If true, skips the verification step after generation
+/// * `_postprocess_only` - If true, skips generation and only runs post-processing (experimental)
+///
+/// # Returns
+///
+/// Returns `Ok(())` on successful completion, or an error if any step fails.
+///
+/// # Pipeline Steps
+///
+/// 1. **Configuration**: Load and validate pyproject.toml settings
+/// 2. **Generation**: Run protoc or buf to generate Python files
+/// 3. **Post-processing**:
+///    - Create `__init__.py` files if configured
+///    - Convert absolute imports to relative imports
+///    - Add type checker suppression headers
+/// 4. **Verification**: Run import tests and optional type checking
+///
+/// # Example
+///
+/// ```no_run
+/// use python_proto_importer::commands::build;
+///
+/// // Standard build
+/// build(None, false, false)?;
+///
+/// // Build without verification
+/// build(None, true, false)?;
+///
+/// // Build with custom config file
+/// build(Some("custom.toml"), false, false)?;
+/// # Ok::<(), anyhow::Error>(())
+/// ```
 pub fn build(pyproject: Option<&str>, no_verify: bool, _postprocess_only: bool) -> Result<()> {
     let cfg = AppConfig::load(pyproject.map(Path::new)).context("failed to load config")?;
     tracing::info!(?cfg.backend, out=%cfg.out.display(), "build start");

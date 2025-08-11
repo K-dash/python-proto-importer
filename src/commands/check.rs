@@ -3,7 +3,47 @@ use crate::verification::import_test::verify;
 use anyhow::{Context, Result};
 use std::path::Path;
 
-/// Execute the check command
+/// Execute the check command to verify existing generated Python code.
+///
+/// This command runs only the verification phase without regenerating any code.
+/// It loads the configuration from pyproject.toml and performs the same validation
+/// checks that are run at the end of the build process.
+///
+/// # Arguments
+///
+/// * `pyproject` - Optional path to the pyproject.toml file. If None, uses "pyproject.toml"
+///
+/// # Returns
+///
+/// Returns `Ok(())` if all verification checks pass, or an error if:
+/// - Configuration cannot be loaded
+/// - Import tests fail
+/// - Type checking fails (if configured)
+///
+/// # Verification Steps
+///
+/// 1. **Configuration Loading**: Reads and validates pyproject.toml settings
+/// 2. **Import Validation**: Attempts to import every generated Python module
+/// 3. **Type Checking**: Runs configured type checkers (mypy/pyright) if specified
+///
+/// # Use Cases
+///
+/// - **CI Integration**: Verify generated code without regenerating
+/// - **Development**: Quick validation after manual changes
+/// - **Debugging**: Isolate verification issues from generation issues
+///
+/// # Example
+///
+/// ```no_run
+/// use python_proto_importer::commands::check;
+///
+/// // Check with default pyproject.toml
+/// check(None)?;
+///
+/// // Check with custom config file
+/// check(Some("custom.toml"))?;
+/// # Ok::<(), anyhow::Error>(())
+/// ```
 pub fn check(pyproject: Option<&str>) -> Result<()> {
     let cfg = AppConfig::load(pyproject.map(Path::new)).context("failed to load config")?;
     verify(&cfg)

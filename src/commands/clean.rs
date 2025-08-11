@@ -3,7 +3,49 @@ use anyhow::{Context, Result, bail};
 use std::fs;
 use std::path::Path;
 
-/// Execute the clean command
+/// Execute the clean command to remove the generated output directory.
+///
+/// This command removes the entire output directory and all its contents, as
+/// specified in the pyproject.toml configuration. It provides a safety mechanism
+/// by requiring explicit confirmation to prevent accidental deletion.
+///
+/// # Arguments
+///
+/// * `pyproject` - Optional path to the pyproject.toml file. If None, uses "pyproject.toml"
+/// * `yes` - Safety flag that must be true to actually perform the deletion
+///
+/// # Returns
+///
+/// Returns `Ok(())` if the operation completes successfully, or an error if:
+/// - Configuration cannot be loaded
+/// - The safety flag (`yes`) is false when the directory exists
+/// - Directory removal fails due to permissions or other filesystem issues
+///
+/// # Safety Features
+///
+/// - **Confirmation Required**: Refuses to delete without explicit `yes` flag
+/// - **No-op for Missing**: Succeeds silently if the output directory doesn't exist
+/// - **Complete Removal**: Recursively removes all files and subdirectories
+///
+/// # Use Cases
+///
+/// - **Fresh Start**: Clear all generated code before regeneration
+/// - **CI Cleanup**: Ensure clean environment between builds
+/// - **Development**: Reset state during iteration
+///
+/// # Example
+///
+/// ```no_run
+/// use python_proto_importer::commands::clean;
+///
+/// // Safe call - will refuse to delete without confirmation
+/// let result = clean(None, false);
+/// assert!(result.is_err()); // Expects error without --yes
+///
+/// // Actual deletion with confirmation
+/// clean(None, true)?; // Removes the configured output directory
+/// # Ok::<(), anyhow::Error>(())
+/// ```
 pub fn clean(pyproject: Option<&str>, yes: bool) -> Result<()> {
     let cfg = AppConfig::load(pyproject.map(Path::new)).context("failed to load config")?;
     let out = &cfg.out;

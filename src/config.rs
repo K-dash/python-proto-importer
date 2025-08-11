@@ -3,41 +3,84 @@ use serde::Deserialize;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+/// Code generation backend selection.
+///
+/// Determines which tool will be used to generate Python code from proto files.
 #[derive(Debug, Clone, Copy)]
 pub enum Backend {
+    /// Use the standard protoc compiler for code generation.
+    /// This is the currently supported and default backend.
     Protoc,
+    /// Use buf generate for code generation.
+    /// This backend is planned for future versions but not yet implemented.
     Buf,
 }
 
+/// Main application configuration parsed from pyproject.toml.
+///
+/// Contains all settings needed to run the proto-to-Python code generation
+/// pipeline, including backend selection, file paths, and processing options.
 #[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct AppConfig {
+    /// Backend to use for code generation (protoc or buf).
     pub backend: Backend,
+    /// Python executable to use for generation and verification.
+    /// Can be "python3", "python", "uv", or a custom path.
     pub python_exe: String,
+    /// Proto import paths (passed as --proto_path to protoc).
+    /// These directories are searched for proto files and their dependencies.
     pub include: Vec<PathBuf>,
+    /// Glob patterns for proto files to compile.
+    /// Only files matching these patterns will be processed.
     pub inputs: Vec<String>,
+    /// Output directory for generated Python files.
     pub out: PathBuf,
+    /// Whether to generate mypy type stubs (.pyi files) using mypy-protobuf.
     pub generate_mypy: bool,
+    /// Whether to generate gRPC mypy stubs (_grpc.pyi files) using mypy-grpc.
     pub generate_mypy_grpc: bool,
+    /// Post-processing configuration options.
     pub postprocess: PostProcess,
+    /// Optional verification configuration (type checking commands).
     pub verify: Option<Verify>,
 }
 
+/// Post-processing configuration options.
+///
+/// Controls how generated files are transformed after initial generation,
+/// including import rewriting, package structure creation, and header addition.
 #[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct PostProcess {
+    /// Convert absolute imports to relative imports within generated files.
     pub relative_imports: bool,
+    /// Fix type annotations in .pyi files (reserved for future use).
     pub fix_pyi: bool,
+    /// Create __init__.py files in all directories to make packages importable.
+    /// Set to false for namespace packages (PEP 420).
     pub create_package: bool,
+    /// Exclude google.protobuf imports from relative import conversion.
     pub exclude_google: bool,
+    /// Add Pyright suppression headers to generated _pb2.py and _pb2_grpc.py files.
     pub pyright_header: bool,
+    /// File suffixes to process during post-processing.
+    /// Default includes _pb2.py, _pb2.pyi, _pb2_grpc.py, _pb2_grpc.pyi.
     pub module_suffixes: Vec<String>,
 }
 
+/// Verification configuration for optional type checking.
+///
+/// Specifies commands to run for validating generated code quality,
+/// typically mypy and/or pyright type checkers.
 #[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct Verify {
+    /// Command to run mypy type checking. If None, mypy verification is skipped.
+    /// Example: ["mypy", "--strict", "generated"]
     pub mypy_cmd: Option<Vec<String>>,
+    /// Command to run pyright type checking. If None, pyright verification is skipped.
+    /// Example: ["pyright", "generated/**/*.pyi"]
     pub pyright_cmd: Option<Vec<String>>,
 }
 
@@ -93,6 +136,37 @@ struct VerifyToml {
 }
 
 impl AppConfig {
+    /// Load configuration from a pyproject.toml file.
+    ///
+    /// Parses the TOML configuration file and validates the settings,
+    /// applying defaults where values are not specified.
+    ///
+    /// # Arguments
+    ///
+    /// * `pyproject_path` - Optional path to the pyproject.toml file.
+    ///   If None, looks for "pyproject.toml" in the current directory.
+    ///
+    /// # Returns
+    ///
+    /// Returns the parsed and validated configuration, or an error if:
+    /// - The file cannot be read
+    /// - The TOML is malformed
+    /// - Required configuration sections are missing
+    /// - Configuration values are invalid
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use python_proto_importer::config::AppConfig;
+    /// use std::path::Path;
+    ///
+    /// // Load from default location
+    /// let config = AppConfig::load(None)?;
+    ///
+    /// // Load from custom path
+    /// let config = AppConfig::load(Some(Path::new("custom.toml")))?;
+    /// # Ok::<(), anyhow::Error>(())
+    /// ```
     pub fn load(pyproject_path: Option<&Path>) -> Result<Self> {
         let path = match pyproject_path {
             Some(p) => p.to_path_buf(),

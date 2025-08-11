@@ -5,12 +5,51 @@ use std::path::Path;
 use std::process::Command;
 use which::which;
 
+/// Check if a command is available in PATH and return its path.
+///
+/// # Arguments
+///
+/// * `cmd` - Command name to check for
+///
+/// # Returns
+///
+/// Returns `Some(String)` with the full path if the command is found,
+/// or `None` if it's not available.
 fn check(cmd: &str) -> Option<String> {
     which(cmd)
         .ok()
         .and_then(|p| p.to_str().map(|s| s.to_string()))
 }
 
+/// Run environment diagnostics and display system information.
+///
+/// This function performs a comprehensive check of the development environment,
+/// reporting on the availability and versions of tools needed for proto-to-Python
+/// code generation. It checks for:
+///
+/// - Python interpreters (uv, python3, python)
+/// - Required Python packages (grpcio-tools)
+/// - Optional Python packages (mypy-protobuf, mypy-grpc)
+/// - Type checkers (mypy, pyright)
+/// - System tools (protoc, buf)
+///
+/// The function also attempts to load and validate a pyproject.toml configuration
+/// to provide targeted recommendations based on the current project setup.
+///
+/// # Returns
+///
+/// Returns `Ok(())` on successful completion of all checks, or an error
+/// if critical issues prevent the diagnostic from running.
+///
+/// # Example
+///
+/// ```no_run
+/// use python_proto_importer::doctor;
+///
+/// fn main() -> anyhow::Result<()> {
+///     doctor::run()
+/// }
+/// ```
 pub fn run() -> Result<()> {
     println!("== Tool presence ==");
 
