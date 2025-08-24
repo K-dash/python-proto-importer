@@ -7,7 +7,7 @@ dependencies = ["grpcio==1.74.0", "grpcio-tools==1.74.0"]
 [dependency-groups]
 dev = [
   "mypy==1.17.1",
-  "pyright==1.1.403",
+  "pyright==1.1.404",
   "pytest==8.4.1",
   "grpc-stubs>=1.24",
   "grpcio-tools>=1.74",
