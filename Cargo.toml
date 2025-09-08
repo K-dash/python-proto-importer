@@ -38,7 +38,7 @@ prost-types = "0.14"
 prost-reflect = "0.16"
 
 # Optional: Python bindings via PyO3 (enabled with `--features python`)
-pyo3 = { version = "0.25.1", features = ["extension-module", "abi3-py38"], optional = true }
+pyo3 = { version = "0.26.0", features = ["extension-module", "abi3-py38"], optional = true }
 
 [features]
 default = []
