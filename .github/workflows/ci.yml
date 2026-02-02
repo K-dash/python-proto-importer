@@ -25,7 +25,7 @@ jobs:
       CARGO_MAKE_VERSION: "0.37.24"
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
       - name: Install Rust (stable)
         uses: dtolnay/rust-toolchain@stable
@@ -64,7 +64,7 @@ jobs:
           cargo tarpaulin --engine llvm --no-dead-code --no-fail-fast --all-features --workspace --timeout 120 --out Lcov --output-dir ./cov-reports --skip-clean
 
       - name: Upload coverage artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: coverage-report
           path: ./cov-reports
@@ -89,10 +89,10 @@ jobs:
       statuses: write
       id-token: write
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
       - name: Download coverage artifact
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           name: coverage-report
           path: ./cov-reports
