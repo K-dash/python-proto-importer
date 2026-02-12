@@ -8,10 +8,10 @@ dependencies = ["grpcio==1.78.0", "grpcio-tools==1.78.0"]
 dev = [
   "mypy==1.19.1",
   "pyright==1.1.408",
-  "pytest==8.4.2",
+  "pytest==9.0.2",
   "grpc-stubs>=1.24",
   "grpcio-tools>=1.74",
-  "mypy-protobuf==3.7.0",
+  "mypy-protobuf==5.0.0",
   "types-protobuf>=5.28",
 ]
 
